@@ -1,0 +1,13 @@
+{
+  "name": "notdone",
+  "version": "0.1.0",
+  "description": "Proof-of-completion verification for Gemini CLI",
+  "contextFileName": "GEMINI-extension.md",
+  "mcpServers": {
+    "notdone": {
+      "command": "notdone-mcp",
+      "args": [],
+      "cwd": "${workspacePath}"
+    }
+  }
+}

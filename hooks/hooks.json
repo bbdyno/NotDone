@@ -1,0 +1,88 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "sequential": true,
+        "hooks": [
+          {
+            "type": "command",
+            "name": "notdone-session-start",
+            "command": "node \"${extensionPath}${/}hooks${/}notdone-hook.mjs\"",
+            "timeout": 10000,
+            "description": "Load active NotDone contract context."
+          }
+        ]
+      },
+      {
+        "matcher": "resume",
+        "sequential": true,
+        "hooks": [
+          {
+            "type": "command",
+            "name": "notdone-session-resume",
+            "command": "node \"${extensionPath}${/}hooks${/}notdone-hook.mjs\"",
+            "timeout": 10000,
+            "description": "Reload active NotDone contract context."
+          }
+        ]
+      },
+      {
+        "matcher": "clear",
+        "sequential": true,
+        "hooks": [
+          {
+            "type": "command",
+            "name": "notdone-session-clear",
+            "command": "node \"${extensionPath}${/}hooks${/}notdone-hook.mjs\"",
+            "timeout": 10000,
+            "description": "Reload active NotDone contract context."
+          }
+        ]
+      }
+    ],
+    "BeforeAgent": [
+      {
+        "sequential": true,
+        "hooks": [
+          {
+            "type": "command",
+            "name": "notdone-before-agent",
+            "command": "node \"${extensionPath}${/}hooks${/}notdone-hook.mjs\"",
+            "timeout": 10000,
+            "description": "Remind the agent when a NotDone contract is active."
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": ".*",
+        "sequential": false,
+        "hooks": [
+          {
+            "type": "command",
+            "name": "notdone-after-tool",
+            "command": "node \"${extensionPath}${/}hooks${/}notdone-hook.mjs\"",
+            "timeout": 10000,
+            "description": "Record normalized tool evidence digests."
+          }
+        ]
+      }
+    ],
+    "AfterAgent": [
+      {
+        "sequential": true,
+        "hooks": [
+          {
+            "type": "command",
+            "name": "notdone-after-agent",
+            "command": "node \"${extensionPath}${/}hooks${/}notdone-hook.mjs\"",
+            "timeout": 15000,
+            "description": "Gate final responses on a verified NotDone proof."
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:notdone:schema:runtime-event:v1",
+  "title": "NotDone Normalized Runtime Event",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "runtime",
+    "sessionId",
+    "eventType",
+    "occurredAt",
+    "cwd"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0"
+    },
+    "id": {
+      "$ref": "#/$defs/identifier"
+    },
+    "runtime": {
+      "enum": [
+        "claude-code",
+        "codex",
+        "gemini-cli"
+      ]
+    },
+    "runtimeVersion": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "sessionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256
+    },
+    "turnId": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "actorId": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "eventType": {
+      "enum": [
+        "session.start",
+        "turn.start",
+        "tool.before",
+        "tool.after",
+        "tool.failure",
+        "subagent.start",
+        "subagent.stop",
+        "completion.attempt"
+      ]
+    },
+    "occurredAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "cwd": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "callId": {
+          "type": "string",
+          "maxLength": 256
+        },
+        "input": true,
+        "output": true,
+        "isError": {
+          "type": "boolean"
+        }
+      }
+    },
+    "nativeEvent": {
+      "type": "string",
+      "maxLength": 128
+    },
+    "payload": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "$defs": {
+    "identifier": {
+      "type": "string",
+      "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]{0,127}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "eventType": {
+            "enum": [
+              "tool.before",
+              "tool.after",
+              "tool.failure"
+            ]
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "tool"
+        ],
+        "properties": {
+          "tool": true
+        }
+      }
+    }
+  ]
+}

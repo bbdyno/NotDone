@@ -10,8 +10,11 @@
     "node": ">=22"
   },
   "scripts": {
-    "check": "pnpm docs:check",
-    "docs:check": "node scripts/check-readmes.mjs"
+    "build": "pnpm --recursive --if-present build",
+    "check": "pnpm docs:check && pnpm typecheck && pnpm test",
+    "docs:check": "node scripts/check-readmes.mjs",
+    "test": "pnpm --recursive --if-present test",
+    "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",

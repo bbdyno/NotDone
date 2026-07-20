@@ -1,0 +1,27 @@
+{
+  "name": "@notdone/protocol",
+  "version": "0.0.0",
+  "description": "Runtime-neutral types, schemas, and integrity helpers for NotDone",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "schemas"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run src",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "ajv-formats": "^3.0.1"
+  }
+}

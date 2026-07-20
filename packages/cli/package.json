@@ -1,0 +1,29 @@
+{
+  "name": "@notdone/cli",
+  "version": "0.0.0",
+  "description": "Command-line interface for NotDone proof verification",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "notdone": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run src",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@notdone/core": "workspace:*",
+    "@notdone/protocol": "workspace:*"
+  }
+}

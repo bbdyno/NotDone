@@ -11,11 +11,13 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present build",
-    "check": "pnpm docs:check && pnpm typecheck && pnpm test && pnpm test:plugins",
+    "check": "pnpm docs:check && pnpm integrations:check && pnpm typecheck && pnpm test && pnpm test:plugins && pnpm test:conformance",
     "docs:check": "node scripts/check-readmes.mjs",
+    "integrations:check": "node scripts/check-integrations.mjs",
     "pack:release": "node scripts/pack-release.mjs",
     "pack:verify": "node scripts/verify-release-packages.mjs",
     "test": "pnpm --recursive --if-present test",
+    "test:conformance": "node --test tests/runtime-conformance.test.mjs",
     "test:plugins": "node --test tests/*-plugin.test.mjs",
     "typecheck": "pnpm --recursive --if-present typecheck"
   },

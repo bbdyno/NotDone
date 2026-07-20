@@ -3,6 +3,9 @@
   "references": [
     {
       "path": "./packages/protocol"
+    },
+    {
+      "path": "./packages/core"
     }
   ]
 }

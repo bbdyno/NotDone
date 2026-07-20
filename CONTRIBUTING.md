@@ -15,16 +15,25 @@ Thank you for helping make agent completion claims more verifiable.
    pnpm check
    ```
 
+Release packaging changes must also pass:
+
+```shell
+pnpm pack:release
+pnpm pack:verify
+```
+
 ## Commit scope
 
 Use small commits that represent one independently verifiable change. Prefer subjects such as:
 
 ```text
-docs: establish multilingual project guide
-feat(protocol): define task contract schema
-feat(core): verify command evidence
-feat(codex): add completion gate hooks
+#123 docs: establish multilingual project guide
+#124 feat(protocol): define task contract schema
+#125 feat(core): verify command evidence
+#126 feat(codex): add completion gate hooks
 ```
+
+Every commit must begin with the GitHub issue number that defines its scope.
 
 ## Protocol changes
 

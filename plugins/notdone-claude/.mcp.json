@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "notdone": {
+      "command": "notdone-mcp",
+      "args": []
+    }
+  }
+}

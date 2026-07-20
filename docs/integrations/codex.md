@@ -9,10 +9,15 @@ NotDone protocol.
 Install the CLI and MCP executable, then add this repository as a marketplace:
 
 ```shell
-npm install --global notdone notdone-mcp
-codex plugin marketplace add bbdyno/NotDone
+pnpm install --frozen-lockfile
+pnpm build
+npm install --global ./packages/cli ./packages/mcp-server
+codex plugin marketplace add .
 codex plugin add notdone@notdone-marketplace
 ```
+
+After the v0.1.0 release, install `notdone` and `notdone-mcp` from npm and
+replace `.` with `bbdyno/NotDone`.
 
 Open `/hooks` in Codex and review the plugin hook definition. Codex does not run
 new or changed non-managed hooks until the user trusts their current hash.

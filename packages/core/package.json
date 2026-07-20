@@ -1,0 +1,25 @@
+{
+  "name": "@notdone/core",
+  "version": "0.0.0",
+  "description": "Deterministic proof collection and verification engine for NotDone",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run src",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@notdone/protocol": "workspace:*"
+  }
+}

@@ -1,0 +1,12 @@
+interface:
+  display_name: "Verify completion with NotDone"
+  short_description: "Prove task completion from executable evidence"
+  default_prompt: "Use $notdone:verify to validate the task contract, run declared checks, and report only the proof-backed result."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "notdone"
+      description: "NotDone contract validation, verification, and proof inspection tools"
+      transport: "stdio"
+policy:
+  allow_implicit_invocation: true

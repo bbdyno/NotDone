@@ -13,9 +13,19 @@ the same version.
 3. Protect `main`, require the CI checks, and restrict creation of `v*` tags to
    release maintainers.
 
-The first publication of a new npm package name may require an owner to publish
-it once using an npm granular access token before trusted publishing can be
-configured. Do not store that token in the repository.
+The first publication of a new npm package name requires an npm granular access
+token because the package settings page does not exist yet. Add a short-lived
+token as the `NPM_TOKEN` secret in the `npm` GitHub environment. The release
+workflow consumes it only as `NODE_AUTH_TOKEN` while retaining npm provenance.
+Do not store or paste the token into the repository.
+
+After the first release:
+
+1. configure the trusted publisher for both packages with GitHub owner
+   `bbdyno`, repository `NotDone`, workflow `release.yml`, environment `npm`,
+   and the `npm publish` action;
+2. delete the `NPM_TOKEN` environment secret; and
+3. require 2FA and disallow token-based publishing in each package's settings.
 
 ## Release checklist
 

@@ -84,6 +84,8 @@ jobs:
 
       - name: Publish packages to npm
         if: github.event_name == 'push'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: node scripts/publish-release.mjs
 
       - name: Create or update GitHub release

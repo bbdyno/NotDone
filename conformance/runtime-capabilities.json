@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "1.0",
+  "protocolVersion": "1.0",
+  "mcpCommand": "notdone-mcp",
+  "runtimes": [
+    {
+      "id": "claude-code",
+      "distribution": "marketplace-plugin",
+      "invocations": [
+        "/notdone:verify"
+      ],
+      "normalizedEvents": [
+        "session.start",
+        "tool.after",
+        "tool.failure",
+        "subagent.start",
+        "subagent.stop",
+        "completion.attempt"
+      ],
+      "completionGates": [
+        "Stop",
+        "TaskCompleted"
+      ],
+      "enforcement": "native-hook"
+    },
+    {
+      "id": "codex",
+      "distribution": "plugin-marketplace",
+      "invocations": [
+        "$notdone:verify"
+      ],
+      "normalizedEvents": [
+        "session.start",
+        "tool.after",
+        "tool.failure",
+        "subagent.stop",
+        "completion.attempt"
+      ],
+      "completionGates": [
+        "Stop"
+      ],
+      "enforcement": "native-hook"
+    },
+    {
+      "id": "gemini-cli",
+      "distribution": "extension",
+      "invocations": [
+        "/notdone",
+        "/notdone:verify"
+      ],
+      "normalizedEvents": [
+        "session.start",
+        "turn.start",
+        "tool.after",
+        "tool.failure",
+        "completion.attempt"
+      ],
+      "completionGates": [
+        "AfterAgent"
+      ],
+      "enforcement": "native-hook"
+    }
+  ]
+}

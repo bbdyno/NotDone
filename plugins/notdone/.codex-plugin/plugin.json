@@ -1,0 +1,39 @@
+{
+  "name": "notdone",
+  "version": "0.1.0",
+  "description": "Proof-of-completion verification for Codex",
+  "author": {
+    "name": "The NotDone Authors",
+    "url": "https://github.com/bbdyno"
+  },
+  "homepage": "https://github.com/bbdyno/NotDone",
+  "repository": "https://github.com/bbdyno/NotDone",
+  "license": "Apache-2.0",
+  "keywords": [
+    "verification",
+    "evidence",
+    "proof-of-completion",
+    "codex"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "NotDone",
+    "shortDescription": "Verify completion from executable evidence.",
+    "longDescription": "NotDone validates frozen task contracts, runs declared checks, rejects agent self-report as proof, and produces integrity-protected proof packets.",
+    "developerName": "The NotDone Authors",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Skills",
+      "MCP",
+      "Lifecycle hooks"
+    ],
+    "websiteURL": "https://github.com/bbdyno/NotDone",
+    "defaultPrompt": [
+      "Verify this task with NotDone.",
+      "Inspect the latest NotDone proof.",
+      "Create a completion contract for this task."
+    ],
+    "brandColor": "#D97706"
+  },
+  "mcpServers": "./.mcp.json"
+}

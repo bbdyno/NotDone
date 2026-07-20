@@ -1,0 +1,20 @@
+{
+  "name": "notdone-marketplace",
+  "interface": {
+    "displayName": "Notdone Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "notdone",
+      "source": {
+        "source": "local",
+        "path": "./plugins/notdone"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_USE"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}

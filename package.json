@@ -11,9 +11,10 @@
   },
   "scripts": {
     "build": "pnpm --recursive --if-present build",
-    "check": "pnpm docs:check && pnpm typecheck && pnpm test",
+    "check": "pnpm docs:check && pnpm typecheck && pnpm test && pnpm test:plugins",
     "docs:check": "node scripts/check-readmes.mjs",
     "test": "pnpm --recursive --if-present test",
+    "test:plugins": "node --test tests/codex-plugin.test.mjs",
     "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {

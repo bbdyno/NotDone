@@ -1,0 +1,54 @@
+{
+  "description": "Record Codex lifecycle evidence and gate completion on a valid NotDone proof.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/notdone-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking the NotDone task contract"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/notdone-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Recording NotDone evidence"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/notdone-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/notdone-hook.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Verifying NotDone completion proof"
+          }
+        ]
+      }
+    ]
+  }
+}

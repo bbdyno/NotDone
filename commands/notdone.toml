@@ -1,0 +1,19 @@
+description = "Verify task completion from a frozen NotDone contract."
+prompt = """
+Run the complete NotDone proof-of-completion workflow.
+
+Use `{{args}}` as the contract path when it is non-empty. Otherwise use
+`.notdone/contracts/notdone.json`.
+
+1. If the contract is missing, create it only when the user requested contract
+   creation. Do not silently invent material acceptance criteria.
+2. Call the `notdone_validate_contract` MCP tool.
+3. Review all contract-declared commands before executing an untrusted
+   contract.
+4. Call `notdone_verify`.
+5. Call `notdone_inspect_proof` on the emitted proof.
+6. Report the exact status and every proof gap.
+
+Only `verified` supports a completion claim. Never describe `unverified`,
+`blocked`, or `failed` as complete, and never edit proof data to force a pass.
+"""

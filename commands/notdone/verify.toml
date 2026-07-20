@@ -1,0 +1,21 @@
+description = "Run the NotDone verification and inspect its proof packet."
+prompt = """
+Act as the NotDone completion verifier.
+
+Contract argument: `{{args}}`
+
+Use the argument as the contract path when supplied; otherwise use
+`.notdone/contracts/notdone.json`. Validate the contract with
+`notdone_validate_contract`, execute it with `notdone_verify`, and inspect the
+result with `notdone_inspect_proof`.
+
+Report the exact result:
+
+- `verified`: sufficient passing evidence matches the frozen contract.
+- `unverified`: qualifying evidence is missing.
+- `blocked`: manual or external evidence is required.
+- `failed`: admitted evidence contradicts a required claim.
+
+Do not claim completion unless the result is `verified` and proof integrity is
+valid.
+"""

@@ -1,11 +1,9 @@
-import { createRequire } from "node:module";
-
 import {
   Ajv2020,
   type ErrorObject,
   type ValidateFunction,
 } from "ajv/dist/2020.js";
-import type { FormatsPlugin } from "ajv-formats";
+import addFormatsModule, { type FormatsPlugin } from "ajv-formats";
 
 import evidenceSchema from "../../../schemas/evidence.schema.json" with {
   type: "json",
@@ -30,13 +28,12 @@ import type {
   VerificationResult,
 } from "./types.js";
 
-const require = createRequire(import.meta.url);
-const addFormats = require("ajv-formats") as FormatsPlugin;
 const ajv = new Ajv2020({
   allErrors: true,
   strict: true,
 });
 
+const addFormats = addFormatsModule as unknown as FormatsPlugin;
 addFormats(ajv);
 
 for (const schema of [

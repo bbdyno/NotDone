@@ -1,0 +1,31 @@
+{
+  "name": "@notdone/mcp-server",
+  "version": "0.0.0",
+  "description": "Model Context Protocol server for NotDone",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "notdone-mcp": "./dist/server.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run src",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@notdone/core": "workspace:*",
+    "@notdone/protocol": "workspace:*",
+    "zod": "^4.4.3"
+  }
+}

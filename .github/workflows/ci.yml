@@ -6,26 +6,34 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
   check:
-    name: Check
+    name: Check (Node.js ${{ matrix.node-version }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - 22
+          - 24
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 11.9.0
+        uses: pnpm/action-setup@v6
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: ${{ matrix.node-version }}
           cache: pnpm
 
       - name: Install dependencies
@@ -33,3 +41,68 @@ jobs:
 
       - name: Run checks
         run: pnpm check
+
+  package:
+    name: Package and validate integrations
+    needs: check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and verify release packages
+        run: |
+          pnpm pack:release
+          pnpm pack:verify
+
+      - name: Validate Codex marketplace installation
+        env:
+          CODEX_HOME: ${{ runner.temp }}/notdone-codex
+        run: |
+          mkdir -p "$CODEX_HOME"
+          npx -y @openai/codex@0.144.6 plugin marketplace add .
+          npx -y @openai/codex@0.144.6 plugin add notdone@notdone-marketplace
+
+      - name: Validate Claude Code marketplace and plugin
+        run: |
+          npx -y @anthropic-ai/claude-code@2.1.215 plugin validate . --strict
+          npx -y @anthropic-ai/claude-code@2.1.215 plugin validate ./plugins/notdone-claude --strict
+
+      - name: Validate Gemini CLI extension
+        env:
+          HOME: ${{ runner.temp }}/notdone-gemini
+        run: npx -y @google/gemini-cli@0.51.0 extensions validate .
+
+      - name: Upload release candidates
+        uses: actions/upload-artifact@v7
+        with:
+          name: npm-release-candidates
+          path: artifacts/*.tgz
+          if-no-files-found: error
+
+  dependency-review:
+    name: Dependency review
+    if: github.event_name == 'pull_request'
+    permissions:
+      contents: read
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Review dependency changes
+        uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high

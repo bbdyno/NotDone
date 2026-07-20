@@ -6,11 +6,18 @@ NotDone core.
 
 ## Install
 
+For a local source checkout:
+
 ```shell
-npm install --global notdone notdone-mcp
-claude plugin marketplace add bbdyno/NotDone
+pnpm install --frozen-lockfile
+pnpm build
+npm install --global ./packages/cli ./packages/mcp-server
+claude plugin marketplace add .
 claude plugin install notdone@notdone-marketplace
 ```
+
+After the v0.1.0 release, install `notdone` and `notdone-mcp` from npm and use
+`claude plugin marketplace add bbdyno/NotDone` for the remote marketplace.
 
 Claude Code asks users to approve local MCP servers. Review the `notdone-mcp`
 command before enabling it.

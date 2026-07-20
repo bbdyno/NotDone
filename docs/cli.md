@@ -3,6 +3,19 @@
 The `notdone` command is the runtime-independent entry point. Agent-specific
 commands and MCP tools delegate to the same operations.
 
+## Install
+
+For the v0.1.0 release candidate, build and install from a source checkout:
+
+```shell
+pnpm install --frozen-lockfile
+pnpm build
+npm install --global ./packages/cli ./packages/mcp-server
+notdone --version
+```
+
+After publication, use `npm install --global notdone notdone-mcp`.
+
 ## Commands
 
 ```text
@@ -11,6 +24,7 @@ notdone contract validate [contract-path] [--json]
 notdone evidence collect [contract-path] [--run-id ID] [--output PATH] [--json]
 notdone verify [contract-path] [--run-id ID] [--output PATH] [--json]
 notdone proof inspect <proof-path> [--json]
+notdone --version
 ```
 
 The default contract is `.notdone/contracts/notdone.json`. Verification writes

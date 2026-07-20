@@ -7,9 +7,16 @@ lifecycle hooks.
 ## Install
 
 ```shell
-npm install --global notdone notdone-mcp
-gemini extensions install https://github.com/bbdyno/NotDone
+pnpm install --frozen-lockfile
+pnpm build
+npm install --global ./packages/cli ./packages/mcp-server
+gemini extensions link .
+gemini extensions validate .
 ```
+
+After the v0.1.0 release, install `notdone` and `notdone-mcp` from npm and use
+`gemini extensions install https://github.com/bbdyno/NotDone` for a remote
+installation.
 
 Restart Gemini CLI after installation or updates so it reloads extension
 commands and configuration.

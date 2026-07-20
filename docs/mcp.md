@@ -4,6 +4,18 @@
 stdio transport. Claude Code, Codex, Gemini CLI, and other MCP clients can use
 the same tool surface.
 
+## Install
+
+Build and install the v0.1.0 release candidate from a source checkout:
+
+```shell
+pnpm install --frozen-lockfile
+pnpm build
+npm install --global ./packages/cli ./packages/mcp-server
+```
+
+After publication, use `npm install --global notdone notdone-mcp`.
+
 ## Tools
 
 | Tool | Behavior |

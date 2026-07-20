@@ -1,4 +1,4 @@
-<!-- docs-revision: 1 -->
+<!-- docs-revision: 2 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,11 +6,13 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-pre--alpha-orange" alt="Status: pre-alpha">
+  <img src="https://img.shields.io/badge/status-v0.1.0--rc-orange" alt="Status: v0.1.0 release candidate">
+  <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/Claude_Code-planned-8A2BE2" alt="Claude Code integration planned">
-  <img src="https://img.shields.io/badge/Codex-planned-111111" alt="Codex integration planned">
-  <img src="https://img.shields.io/badge/Gemini_CLI-planned-4285F4" alt="Gemini CLI integration planned">
+  <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 or later">
+  <img src="https://img.shields.io/badge/Claude_Code-ready-8A2BE2" alt="Claude Code integration ready">
+  <img src="https://img.shields.io/badge/Codex-ready-111111" alt="Codex integration ready">
+  <img src="https://img.shields.io/badge/Gemini_CLI-ready-4285F4" alt="Gemini CLI integration ready">
   <a href="https://github.com/bbdyno/NotDone/stargazers"><img src="https://img.shields.io/github/stars/bbdyno/NotDone?style=social" alt="GitHub stars"></a>
 </p>
 
@@ -29,7 +31,7 @@
 NotDone is a runtime-neutral proof-of-completion layer for AI coding agents. It turns acceptance criteria into a machine-readable contract, captures evidence from real tools, and independently verifies whether an agent has earned the right to call a task complete.
 
 > [!WARNING]
-> NotDone is currently pre-alpha. The commands and integrations below describe the target v0.1 experience and are not yet published for installation.
+> The v0.1.0 implementation is a release candidate. Source builds, standalone package artifacts, and all three runtime integrations are validated, but the npm packages and GitHub release have not been published from this working copy yet.
 
 ## Why NotDone?
 
@@ -43,7 +45,7 @@ AI agents can report success without running the relevant test, confuse a partia
 
 ## Supported runtimes
 
-NotDone targets three first-class integrations backed by one common core:
+NotDone supports three first-class integrations backed by one common core:
 
 | Runtime | Distribution | Explicit workflow |
 | --- | --- | --- |
@@ -54,18 +56,43 @@ NotDone targets three first-class integrations backed by one common core:
 
 Runtime-specific hooks only normalize events and enforce completion gates. Contract evaluation, evidence storage, hashing, and verification remain in the runtime-neutral core.
 
-## Target quick start
+## Quick start
+
+### Install from this source checkout
+
+Node.js 22 or later and pnpm 11.9.0 are required.
+
+```shell
+git clone https://github.com/bbdyno/NotDone.git
+cd NotDone
+pnpm install --frozen-lockfile
+pnpm build
+npm install --global ./packages/cli ./packages/mcp-server
+```
 
 ### CLI
 
+After the v0.1.0 npm release, install the two standalone packages with:
+
 ```shell
-npm install --global notdone
+npm install --global notdone notdone-mcp
 notdone init
+notdone contract validate
 notdone verify
-notdone report
+notdone proof inspect .notdone/proofs/<run-id>.proof.json
 ```
 
 ### Claude Code
+
+From a local source checkout:
+
+```text
+/plugin marketplace add .
+/plugin install notdone@notdone-marketplace
+/notdone:verify
+```
+
+After the repository is published, the remote marketplace flow is:
 
 ```text
 /plugin marketplace add bbdyno/NotDone
@@ -75,12 +102,15 @@ notdone report
 
 ### Codex
 
+From a local source checkout:
+
 ```shell
-codex plugin marketplace add bbdyno/NotDone
+codex plugin marketplace add .
 codex plugin add notdone@notdone-marketplace
 ```
 
-Then explicitly mention the workflow:
+After the repository is published, replace `.` with `bbdyno/NotDone`. Then
+explicitly invoke the namespaced skill:
 
 ```text
 $notdone:verify
@@ -88,14 +118,20 @@ $notdone:verify
 
 ### Gemini CLI
 
+From a local source checkout:
+
 ```shell
-gemini extensions install https://github.com/bbdyno/NotDone
+gemini extensions link .
+gemini extensions validate .
 ```
 
-Then run:
+After the repository is published, use
+`gemini extensions install https://github.com/bbdyno/NotDone`. Both native
+commands run the same verification workflow:
 
 ```text
 /notdone
+/notdone:verify
 ```
 
 ## How it works
@@ -142,22 +178,39 @@ NotDone distinguishes evidence by provenance:
 | `observed` | A runtime hook observed a tool event |
 | `executed` | NotDone executed a contract-defined check |
 | `reproduced` | An independent verification repeated the check |
-| `attested` | A CI or remote verifier signed the result; planned after v0.1 |
+| `attested` | A CI or remote verifier signed the result; protocol-defined, but not produced by the local collector |
 
-The local v0.1 target is an honest-but-fallible agent. It detects unsupported completion claims and tampered packets, but does not claim to defeat a malicious process with the same operating-system permissions. See [the threat model](docs/threat-model.md).
+The local v0.1 implementation targets an honest-but-fallible agent. It detects unsupported completion claims and tampered packets, but does not claim to defeat a malicious process with the same operating-system permissions. See [the threat model](docs/threat-model.md).
 
 ## Project status
 
-The implementation is proceeding in independently verifiable stages:
+The v0.1.0 release candidate includes:
 
-1. Protocol schemas and canonical digests
-2. Core evidence and verification engine
-3. CLI and MCP server
-4. Codex, Claude Code, and Gemini CLI adapters
-5. Cross-runtime conformance tests
-6. Reproducible v0.1 release artifacts
+- versioned protocol schemas, canonical JSON, and SHA-256 packet integrity;
+- deterministic command, file, and Git-diff verification;
+- standalone `notdone` CLI and `notdone-mcp` packages;
+- native Claude Code, Codex, and Gemini CLI distribution and completion gates;
+- schema-backed cross-runtime conformance tests;
+- Node.js 22/24 CI, package installation tests, dependency review, release
+  checksums, npm provenance, and GitHub build attestations.
 
-See [ROADMAP.md](ROADMAP.md) for the current scope.
+Publication of the npm packages and the `v0.1.0` GitHub release is the remaining
+release operation. See [ROADMAP.md](ROADMAP.md), [the protocol](docs/protocol.md),
+[CLI reference](docs/cli.md), [MCP reference](docs/mcp.md), and
+[release procedure](RELEASING.md).
+
+## Verify this checkout
+
+```shell
+pnpm check
+pnpm pack:release
+pnpm pack:verify
+```
+
+The first command runs type checks, unit tests, runtime hook tests, conformance,
+and documentation/integration checks. The package commands build both npm
+tarballs, install them in isolation, probe the CLI and MCP server, and verify
+their license contents.
 
 ## Contributing
 

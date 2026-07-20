@@ -1,6 +1,6 @@
 # Support
 
-NotDone is currently pre-alpha.
+NotDone is currently a v0.1.0 release candidate.
 
 - Use GitHub Discussions for usage questions and design feedback when available.
 - Use GitHub Issues for reproducible bugs and feature requests.

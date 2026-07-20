@@ -134,11 +134,14 @@ for (const artifact of artifacts) {
     "-tzf",
     resolve(artifactsDirectory, artifact),
   ]);
+  const executablePath = artifact.startsWith("notdone-mcp-")
+    ? "package/dist/server.js"
+    : "package/dist/bin.js";
   for (const requiredPath of [
     "package/README.md",
     "package/dist/LICENSE",
     "package/dist/NOTICE",
-    "package/dist/index.d.ts",
+    executablePath,
     "package/package.json",
   ]) {
     if (!listing.stdout.split("\n").includes(requiredPath)) {
@@ -177,6 +180,9 @@ try {
   ) {
     throw new Error("notdone release package contains runtime dependencies");
   }
+  if (packageJson.exports !== undefined || packageJson.types !== undefined) {
+    throw new Error("notdone must remain an executable-only package");
+  }
 
   const mcpPackageJson = JSON.parse(
     await readFile(
@@ -191,6 +197,12 @@ try {
     throw new Error(
       "notdone-mcp release package contains runtime dependencies",
     );
+  }
+  if (
+    mcpPackageJson.exports !== undefined ||
+    mcpPackageJson.types !== undefined
+  ) {
+    throw new Error("notdone-mcp must remain an executable-only package");
   }
 
   await probeMcpServer(

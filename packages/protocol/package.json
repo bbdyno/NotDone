@@ -1,6 +1,6 @@
 {
   "name": "@notdone/protocol",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Runtime-neutral types, schemas, and integrity helpers for NotDone",
   "license": "Apache-2.0",
   "private": true,

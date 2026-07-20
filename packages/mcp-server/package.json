@@ -1,10 +1,31 @@
 {
-  "name": "@notdone/mcp-server",
-  "version": "0.0.0",
+  "name": "notdone-mcp",
+  "version": "0.1.0",
   "description": "Model Context Protocol server for NotDone",
   "license": "Apache-2.0",
-  "private": true,
   "type": "module",
+  "homepage": "https://github.com/bbdyno/NotDone#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bbdyno/NotDone.git",
+    "directory": "packages/mcp-server"
+  },
+  "bugs": {
+    "url": "https://github.com/bbdyno/NotDone/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "model-context-protocol",
+    "proof-of-completion",
+    "verification"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "bin": {
     "notdone-mcp": "./dist/server.js"
   },
@@ -15,14 +36,15 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.release.json && tsup && node ../../scripts/copy-package-assets.mjs dist",
     "test": "vitest run src",
     "typecheck": "tsc -b --pretty false"
   },
-  "dependencies": {
+  "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@notdone/core": "workspace:*",
     "@notdone/protocol": "workspace:*",

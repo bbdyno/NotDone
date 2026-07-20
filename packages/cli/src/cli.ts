@@ -3,7 +3,6 @@
 import { randomUUID } from "node:crypto";
 import { access } from "node:fs/promises";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
 
 import {
   collectEvidence,
@@ -25,7 +24,7 @@ import {
 } from "./files.js";
 import { createContractTemplate } from "./template.js";
 
-export const CLI_VERSION = "0.0.0";
+export const CLI_VERSION = "0.1.0";
 export const DEFAULT_CONTRACT_PATH = ".notdone/contracts/notdone.json";
 
 export const exitCodes = {
@@ -413,12 +412,4 @@ export async function runCli(
     }
     return exitCodes.error;
   }
-}
-
-const entrypoint = process.argv[1];
-if (
-  entrypoint !== undefined &&
-  import.meta.url === pathToFileURL(entrypoint).href
-) {
-  process.exitCode = await runCli();
 }

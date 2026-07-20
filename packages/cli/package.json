@@ -1,12 +1,33 @@
 {
-  "name": "@notdone/cli",
-  "version": "0.0.0",
+  "name": "notdone",
+  "version": "0.1.0",
   "description": "Command-line interface for NotDone proof verification",
   "license": "Apache-2.0",
-  "private": true,
   "type": "module",
+  "homepage": "https://github.com/bbdyno/NotDone#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bbdyno/NotDone.git",
+    "directory": "packages/cli"
+  },
+  "bugs": {
+    "url": "https://github.com/bbdyno/NotDone/issues"
+  },
+  "keywords": [
+    "ai-agent",
+    "proof-of-completion",
+    "verification",
+    "cli"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "bin": {
-    "notdone": "./dist/cli.js"
+    "notdone": "./dist/bin.js"
   },
   "exports": {
     ".": {
@@ -15,14 +36,15 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
-    "build": "tsc -b",
+    "build": "node ../../scripts/clean-package-dist.mjs && tsc -p tsconfig.release.json && tsup && node ../../scripts/copy-package-assets.mjs dist",
     "test": "vitest run src",
     "typecheck": "tsc -b --pretty false"
   },
-  "dependencies": {
+  "devDependencies": {
     "@notdone/core": "workspace:*",
     "@notdone/protocol": "workspace:*"
   }

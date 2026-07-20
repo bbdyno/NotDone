@@ -1,6 +1,6 @@
 {
-  "name": "notdone",
-  "version": "0.0.0",
+  "name": "notdone-monorepo",
+  "version": "0.1.0",
   "description": "Proof-of-completion for AI agents",
   "license": "Apache-2.0",
   "private": true,
@@ -13,12 +13,15 @@
     "build": "pnpm --recursive --if-present build",
     "check": "pnpm docs:check && pnpm typecheck && pnpm test && pnpm test:plugins",
     "docs:check": "node scripts/check-readmes.mjs",
+    "pack:release": "node scripts/pack-release.mjs",
+    "pack:verify": "node scripts/verify-release-packages.mjs",
     "test": "pnpm --recursive --if-present test",
     "test:plugins": "node --test tests/*-plugin.test.mjs",
     "typecheck": "pnpm --recursive --if-present typecheck"
   },
   "devDependencies": {
     "@types/node": "^26.1.1",
+    "tsup": "^8.5.1",
     "tsx": "^4.23.1",
     "typescript": "^7.0.2",
     "vitest": "^4.1.10"

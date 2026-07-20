@@ -1,0 +1,90 @@
+{
+  "description": "Record Claude Code lifecycle evidence and gate completion on a valid NotDone proof.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Checking the NotDone task contract"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Recording NotDone evidence"
+          }
+        ]
+      }
+    ],
+    "PostToolUseFailure": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 10,
+            "statusMessage": "Recording NotDone failure evidence"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Checking NotDone task proof"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/notdone-hook.mjs\"",
+            "timeout": 15,
+            "statusMessage": "Verifying NotDone completion proof"
+          }
+        ]
+      }
+    ]
+  }
+}

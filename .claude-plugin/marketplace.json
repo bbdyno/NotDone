@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "notdone-marketplace",
+  "description": "Proof-of-completion verification for AI coding agents.",
+  "owner": {
+    "name": "The NotDone Authors"
+  },
+  "plugins": [
+    {
+      "name": "notdone",
+      "source": "./plugins/notdone-claude",
+      "description": "Validate task contracts and gate completion on executable evidence.",
+      "version": "0.1.0",
+      "author": {
+        "name": "The NotDone Authors"
+      },
+      "homepage": "https://github.com/bbdyno/NotDone",
+      "repository": "https://github.com/bbdyno/NotDone",
+      "license": "Apache-2.0",
+      "keywords": [
+        "verification",
+        "evidence",
+        "proof-of-completion",
+        "claude-code"
+      ],
+      "category": "development"
+    }
+  ]
+}

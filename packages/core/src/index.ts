@@ -1,4 +1,5 @@
 export * from "./collector.js";
+export * from "./context-compiler.js";
 export * from "./evaluator.js";
 export * from "./legacy-adapter.js";
 export * from "./local-retriever.js";

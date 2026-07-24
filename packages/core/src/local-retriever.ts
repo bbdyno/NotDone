@@ -335,7 +335,7 @@ export class LocalRetriever {
         observedAt: createdAt,
         artifact: citation.artifact,
         citations: [citation],
-        metadata: { score: result.score },
+        metadata: { excerpt: result.excerpt, score: result.score },
       };
     });
     const evidenceBundle: EvidenceBundle = {

@@ -4,12 +4,8 @@ import type {
   TaskContract,
 } from "@notdone/protocol";
 
-import {
-  collectEvidence,
-  type CollectEvidenceOptions,
-} from "./collector.js";
-import { evaluateContract } from "./evaluator.js";
-import { createProofPacket } from "./proof-packet.js";
+import type { CollectEvidenceOptions } from "./collector.js";
+import { LegacyExecutionAdapter } from "./legacy-adapter.js";
 
 export interface VerifyWorkspaceOptions
   extends Omit<CollectEvidenceOptions, "contract"> {
@@ -20,29 +16,7 @@ export interface VerifyWorkspaceOptions
 }
 
 export async function verifyWorkspace({
-  contract,
-  existingEvidence = [],
-  runtimeCapabilities = [],
-  evaluatedAt,
-  ...collectionOptions
+  ...options
 }: VerifyWorkspaceOptions) {
-  const collected = await collectEvidence({
-    contract,
-    ...collectionOptions,
-  });
-  const evidence = [...existingEvidence, ...collected];
-  const result = evaluateContract({
-    contract,
-    evidence,
-    runId: collectionOptions.runId,
-    ...(evaluatedAt === undefined ? {} : { evaluatedAt }),
-  });
-
-  return createProofPacket({
-    contract,
-    evidence,
-    result,
-    runtimeCapabilities,
-    ...(evaluatedAt === undefined ? {} : { createdAt: evaluatedAt }),
-  });
+  return new LegacyExecutionAdapter().verifyWorkspace(options);
 }

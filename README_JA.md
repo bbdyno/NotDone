@@ -26,6 +26,8 @@
 
 # NotDone
 
+![NotDone の入力、capability、出力を示す図](docs/assets/notdone-composable-runtime-hero.svg)
+
 > エージェントは「完了」と言います。NotDone は証拠を求めます。
 
 NotDone は、AI コーディングエージェント向けのランタイム中立な完了証明レイヤーです。完了条件を機械可読な契約として固定し、実際のツールから証拠を収集して、エージェントがタスクを完了したと言えるかを独立して検証します。
@@ -132,6 +134,19 @@ gemini extensions validate .
 /notdone
 /notdone:verify
 ```
+
+## 組み合わせ可能なローカル優先ワークフロー
+
+CLI は、設定されていない backend が実行されたようには表示しません。
+
+| 用途 | コマンド | 動作 |
+| --- | --- | --- |
+| 検索のみ | `notdone retrieve <query> --json` | 許可されたローカルテキストを検索し、citation と evidence artifact を返します。 |
+| 検証のみ | `notdone verify [contract-path]` | 検索やモデルなしで独立した proof workflow を実行します。 |
+| 状態確認 | `notdone backends --json`, `notdone packs --json` | ローカル検索/検証、任意モデルの状態、宣言型 Pack を表示します。 |
+| 組み合わせの説明 | `notdone run retrieve-model-verify <query> --profile Private --json` | route、egress、citation、保留中の検証、backend 未使用可能状態を表示します。 |
+
+対応パスは Retrieve、Verify、Run、Retrieve → Run、Run → Verify、Retrieve → Run → Verify です。`Private` profile は外部ネットワークを拒否し、`Saver` と `Quality` はリモート経路に承認が必要です。モデル backend は既定で構成されません。
 
 ## 仕組み
 

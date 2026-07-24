@@ -26,6 +26,8 @@
 
 # NotDone
 
+![NotDone 입력, capability, 출력 구조 다이어그램](docs/assets/notdone-composable-runtime-hero.svg)
+
 > 에이전트는 “완료”라고 말합니다. NotDone은 증거를 요구합니다.
 
 NotDone은 AI 코딩 에이전트를 위한 런타임 중립 완료 증명 계층입니다. 완료 조건을 기계가 읽을 수 있는 계약으로 고정하고, 실제 도구에서 증거를 수집한 뒤 에이전트가 작업을 완료했다고 말할 자격이 있는지 독립적으로 검증합니다.
@@ -131,6 +133,19 @@ gemini extensions validate .
 /notdone
 /notdone:verify
 ```
+
+## 조합 가능한 로컬 우선 워크플로
+
+CLI는 설정되지 않은 backend가 실행된 것처럼 보이게 하지 않습니다.
+
+| 필요 | 명령 | 동작 |
+| --- | --- | --- |
+| 검색만 | `notdone retrieve <query> --json` | 허용된 로컬 텍스트를 검색하고 citation 및 evidence artifact를 반환합니다. |
+| 검증만 | `notdone verify [contract-path]` | 검색·모델 없이 독립 proof workflow를 실행합니다. |
+| 상태 확인 | `notdone backends --json`, `notdone packs --json` | 로컬 검색/검증, 선택적 모델 상태, 선언형 Pack을 표시합니다. |
+| 조합 설명 | `notdone run retrieve-model-verify <query> --profile Private --json` | route, egress, citation, 대기 중인 검증과 backend 미가용 상태를 표시합니다. |
+
+지원 경로는 Retrieve, Verify, Run, Retrieve → Run, Run → Verify, Retrieve → Run → Verify입니다. `Private` profile은 외부 네트워크를 거부하고, `Saver`와 `Quality`는 원격 경로에 승인이 필요합니다. 모델 backend는 기본으로 구성되지 않습니다.
 
 ## 동작 방식
 

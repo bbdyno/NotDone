@@ -26,6 +26,8 @@
 
 # NotDone
 
+![顯示 NotDone 輸入、capability 與輸出的圖](docs/assets/notdone-composable-runtime-hero.svg)
+
 > 代理程式說「完成了」，NotDone 要求它提出證據。
 
 NotDone 是提供給 AI 程式開發代理程式的執行環境中立完成證明層。它會把驗收條件凍結為機器可讀的合約，從實際工具收集證據，並獨立判定代理程式是否有資格宣稱工作已完成。
@@ -131,6 +133,19 @@ gemini extensions validate .
 /notdone
 /notdone:verify
 ```
+
+## 可組合的本機優先工作流程
+
+CLI 不會把尚未設定的 backend 表示為已經執行。
+
+| 需求 | 指令 | 行為 |
+| --- | --- | --- |
+| 僅檢索 | `notdone retrieve <query> --json` | 搜尋允許的本機文字，並傳回 citation 與 evidence artifact。 |
+| 僅驗證 | `notdone verify [contract-path]` | 不需檢索或模型即可執行獨立 proof workflow。 |
+| 查看狀態 | `notdone backends --json`, `notdone packs --json` | 顯示本機檢索/驗證、選用模型狀態和宣告式 Pack。 |
+| 說明組合 | `notdone run retrieve-model-verify <query> --profile Private --json` | 顯示 route、egress、citation、待驗證狀態和 backend 無法使用狀態。 |
+
+支援 Retrieve、Verify、Run、Retrieve → Run、Run → Verify 與 Retrieve → Run → Verify。`Private` profile 會拒絕外部網路；`Saver` 和 `Quality` 的遠端路徑需要核准。模型 backend 預設未設定。
 
 ## 運作方式
 

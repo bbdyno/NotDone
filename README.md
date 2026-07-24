@@ -26,6 +26,8 @@
 
 # NotDone
 
+![Diagram of NotDone inputs, capabilities, and outputs](docs/assets/notdone-composable-runtime-hero.svg)
+
 > Agents say “done.” NotDone asks for proof.
 
 NotDone is a runtime-neutral proof-of-completion layer for AI coding agents. It turns acceptance criteria into a machine-readable contract, captures evidence from real tools, and independently verifies whether an agent has earned the right to call a task complete.
@@ -134,7 +136,20 @@ commands run the same verification workflow:
 /notdone:verify
 ```
 
-## How it works
+## Composable local-first workflows
+
+The CLI exposes workflows without pretending that an unconfigured backend ran.
+
+| Need | Available command | What happens |
+| --- | --- | --- |
+| Retrieve only | `notdone retrieve <query> --json` | Searches allowed local text files and returns citations and an evidence artifact. |
+| Verify only | `notdone verify [contract-path]` | Runs the independent proof workflow; no retrieval or model is required. |
+| Inspect capabilities | `notdone backends --json`, `notdone packs --json` | Shows local retrieval/verification, optional model state, and declarative Packs. |
+| Explain a composition | `notdone run retrieve-model-verify <query> --profile Private --json` | Shows route, egress, citations, pending verification, and an honest backend-unavailable state when no model is configured. |
+
+The supported compositions are Retrieve, Verify, Run, Retrieve → Run, Run → Verify, and Retrieve → Run → Verify. Model-bearing modes are policy-gated: the `Private` profile denies external network use; `Saver` and `Quality` require approval before a remote route. A model backend is not configured by default.
+
+## Architecture
 
 ```text
 Task request

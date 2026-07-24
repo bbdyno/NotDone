@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">NotDone composable local-first runtime</title>
+  <desc id="desc">Files, Git, prompts, and artifacts enter retrieve, route, run, and verify capabilities. Evidence, decisions, artifacts, and verdicts leave through independent and combined paths.</desc>
+  <rect width="1280" height="640" rx="28" fill="#0d1117"/>
+  <g font-family="system-ui, -apple-system, sans-serif">
+    <text x="72" y="86" fill="#f0f6fc" font-size="40" font-weight="700">NotDone · composable local-first runtime</text>
+    <text x="72" y="122" fill="#8b949e" font-size="20">Retrieve evidence, route deliberately, run only when configured, and verify independently.</text>
+    <g fill="#161b22" stroke="#30363d" stroke-width="2">
+      <rect x="72" y="194" width="220" height="270" rx="16"/>
+      <rect x="402" y="164" width="476" height="332" rx="16"/>
+      <rect x="988" y="194" width="220" height="270" rx="16"/>
+    </g>
+    <g fill="#f0f6fc" font-size="18" font-weight="700"><text x="98" y="232">INPUTS</text><text x="428" y="202">CAPABILITIES</text><text x="1014" y="232">OUTPUTS</text></g>
+    <g fill="#c9d1d9" font-size="20"><text x="98" y="282">Files</text><text x="98" y="330">Git</text><text x="98" y="378">Prompt</text><text x="98" y="426">Artifact</text><text x="1014" y="282">Evidence</text><text x="1014" y="330">Decision</text><text x="1014" y="378">Artifact</text><text x="1014" y="426">Verdict</text></g>
+    <g stroke="#58a6ff" stroke-width="3" fill="none"><path d="M292 282H402"/><path d="M292 426H402"/><path d="M878 282H988"/><path d="M878 426H988"/><path d="M548 276H730"/><path d="M730 276V390H778"/></g>
+    <g fill="#58a6ff"><path d="M394 275l14 7-14 7z"/><path d="M980 275l14 7-14 7z"/><path d="M394 419l14 7-14 7z"/><path d="M980 419l14 7-14 7z"/><path d="M722 269l14 7-14 7z"/><path d="M770 383l14 7-14 7z"/></g>
+    <g font-size="20" font-weight="700"><rect x="428" y="250" width="120" height="56" rx="12" fill="#1f6feb"/><text x="446" y="286" fill="#fff">Retrieve</text><rect x="610" y="250" width="120" height="56" rx="12" fill="#238636"/><text x="638" y="286" fill="#fff">Route</text><rect x="758" y="250" width="92" height="56" rx="12" fill="#8957e5"/><text x="780" y="286" fill="#fff">Run</text><rect x="658" y="362" width="120" height="56" rx="12" fill="#d29922"/><text x="680" y="398" fill="#fff">Verify</text></g>
+    <g fill="#8b949e" font-size="16"><text x="428" y="452">Files → Retrieve → Evidence</text><text x="620" y="452">Artifact → Verify → Verdict</text><text x="428" y="530">Retrieve → Route → Run → Verify</text><text x="428" y="558">Run is optional; verification never trusts completion text.</text></g>
+  </g>
+</svg>

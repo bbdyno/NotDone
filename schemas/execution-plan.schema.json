@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:notdone:schema:execution-plan:v1",
+  "title": "NotDone Provider-Neutral Execution Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "createdAt", "steps", "policy"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/id" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/executionStep" }
+    },
+    "policy": { "$ref": "#/$defs/executionPolicy" },
+    "verificationGates": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/verificationGate" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "artifactReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "artifactId"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "artifactId": { "$ref": "#/$defs/id" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "executionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "externalNetwork", "loopback", "allowedTools", "approvalRequirement"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "externalNetwork": { "enum": ["deny", "allow"] },
+        "loopback": { "enum": ["deny", "allow"] },
+        "remoteTokenBudget": { "type": "integer", "minimum": 0 },
+        "allowedTools": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 },
+          "uniqueItems": true
+        },
+        "approvalRequirement": { "enum": ["none", "required"] }
+      }
+    },
+    "executionStep": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "capability"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "id": { "$ref": "#/$defs/id" },
+        "capability": { "enum": ["retrieve", "verify", "run"] },
+        "dependsOn": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "inputArtifacts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/artifactReference" }
+        },
+        "outputArtifactIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "verificationGateIds": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        }
+      }
+    },
+    "verificationGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "id", "required"],
+      "properties": {
+        "schemaVersion": { "const": "1.0" },
+        "id": { "$ref": "#/$defs/id" },
+        "required": { "type": "boolean" },
+        "description": { "type": "string" }
+      }
+    }
+  }
+}

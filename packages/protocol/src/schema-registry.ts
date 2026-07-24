@@ -8,6 +8,9 @@ import addFormatsModule, { type FormatsPlugin } from "ajv-formats";
 import evidenceSchema from "../../../schemas/evidence.schema.json" with {
   type: "json",
 };
+import executionPlanSchema from "../../../schemas/execution-plan.schema.json" with {
+  type: "json",
+};
 import proofPacketSchema from "../../../schemas/proof-packet.schema.json" with {
   type: "json",
 };
@@ -22,6 +25,7 @@ import verificationResultSchema from "../../../schemas/verification-result.schem
 };
 import type {
   EvidenceRecord,
+  ExecutionPlan,
   ProofPacket,
   RuntimeEvent,
   TaskContract,
@@ -39,6 +43,7 @@ addFormats(ajv);
 for (const schema of [
   taskContractSchema,
   evidenceSchema,
+  executionPlanSchema,
   runtimeEventSchema,
   verificationResultSchema,
   proofPacketSchema,
@@ -59,6 +64,9 @@ const taskContractValidator = getValidator<TaskContract>(
 );
 const evidenceValidator = getValidator<EvidenceRecord>(
   "urn:notdone:schema:evidence:v1",
+);
+const executionPlanValidator = getValidator<ExecutionPlan>(
+  "urn:notdone:schema:execution-plan:v1",
 );
 const runtimeEventValidator = getValidator<RuntimeEvent>(
   "urn:notdone:schema:runtime-event:v1",
@@ -107,6 +115,73 @@ export const validateEvidence = (
   value: unknown,
 ): ValidationResult<EvidenceRecord> => validate(evidenceValidator, value);
 
+function executionPlanSemanticErrors(plan: ExecutionPlan): ErrorObject[] {
+  const stepIds = new Set<string>();
+  const gateIds = new Set<string>();
+  const errors: ErrorObject[] = [];
+
+  for (const step of plan.steps) {
+    if (stepIds.has(step.id)) {
+      errors.push({
+        instancePath: "/steps",
+        schemaPath: "#/semantic/uniqueStepIds",
+        keyword: "semantic",
+        params: {},
+        message: `duplicate execution step id: ${step.id}`,
+      });
+    }
+    stepIds.add(step.id);
+  }
+  for (const gate of plan.verificationGates ?? []) {
+    if (gateIds.has(gate.id)) {
+      errors.push({
+        instancePath: "/verificationGates",
+        schemaPath: "#/semantic/uniqueGateIds",
+        keyword: "semantic",
+        params: {},
+        message: `duplicate verification gate id: ${gate.id}`,
+      });
+    }
+    gateIds.add(gate.id);
+  }
+  for (const step of plan.steps) {
+    for (const dependency of step.dependsOn ?? []) {
+      if (dependency === step.id || !stepIds.has(dependency)) {
+        errors.push({
+          instancePath: "/steps",
+          schemaPath: "#/semantic/stepDependencies",
+          keyword: "semantic",
+          params: {},
+          message: `unknown or self dependency: ${dependency}`,
+        });
+      }
+    }
+    for (const gateId of step.verificationGateIds ?? []) {
+      if (!gateIds.has(gateId)) {
+        errors.push({
+          instancePath: "/steps",
+          schemaPath: "#/semantic/stepGates",
+          keyword: "semantic",
+          params: {},
+          message: `unknown verification gate: ${gateId}`,
+        });
+      }
+    }
+  }
+  return errors;
+}
+
+export const validateExecutionPlan = (
+  value: unknown,
+): ValidationResult<ExecutionPlan> => {
+  const result = validate(executionPlanValidator, value);
+  if (!result.valid) {
+    return result;
+  }
+  const errors = executionPlanSemanticErrors(result.value);
+  return errors.length === 0 ? result : { valid: false, errors };
+};
+
 export const validateRuntimeEvent = (
   value: unknown,
 ): ValidationResult<RuntimeEvent> => validate(runtimeEventValidator, value);
@@ -141,6 +216,15 @@ export function assertEvidence(value: unknown): asserts value is EvidenceRecord 
   const result = validateEvidence(value);
   if (!result.valid) {
     throw new SchemaValidationError("Evidence", result.errors);
+  }
+}
+
+export function assertExecutionPlan(
+  value: unknown,
+): asserts value is ExecutionPlan {
+  const result = validateExecutionPlan(value);
+  if (!result.valid) {
+    throw new SchemaValidationError("Execution plan", result.errors);
   }
 }
 

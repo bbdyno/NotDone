@@ -220,3 +220,143 @@ export interface ProofPacket {
     digest: string;
   };
 }
+
+export type CapabilityKind = "retrieve" | "verify" | "run";
+
+export type RunStatus =
+  | "pending"
+  | "running"
+  | "succeeded"
+  | "failed"
+  | "cancelled";
+
+export type VerificationVerdict = "PASS" | "FAIL" | "ABSTAIN" | "ERROR";
+
+export interface ArtifactReference {
+  schemaVersion: SchemaVersion;
+  artifactId: string;
+  digest?: string;
+}
+
+export interface Artifact {
+  schemaVersion: SchemaVersion;
+  id: string;
+  createdAt: string;
+  mediaType: string;
+  size: number;
+  digest: string;
+  reference?: ArtifactReference;
+  metadata?: Record<string, JsonValue>;
+}
+
+export interface Citation {
+  schemaVersion: SchemaVersion;
+  id: string;
+  artifact: ArtifactReference;
+  locator?: string;
+  label?: string;
+}
+
+export interface Evidence {
+  schemaVersion: SchemaVersion;
+  id: string;
+  observedAt: string;
+  artifact: ArtifactReference;
+  citations?: Citation[];
+  metadata?: Record<string, JsonValue>;
+}
+
+export interface EvidenceBundle {
+  schemaVersion: SchemaVersion;
+  id: string;
+  createdAt: string;
+  evidence: Evidence[];
+}
+
+export interface VerificationGate {
+  schemaVersion: SchemaVersion;
+  id: string;
+  required: boolean;
+  description?: string;
+}
+
+export interface VerificationReport {
+  schemaVersion: SchemaVersion;
+  id: string;
+  createdAt: string;
+  gateId: string;
+  verdict: VerificationVerdict;
+  evidenceBundle?: ArtifactReference;
+  reason?: string;
+}
+
+export interface ExecutionPolicy {
+  schemaVersion: SchemaVersion;
+  externalNetwork: "deny" | "allow";
+  loopback: "deny" | "allow";
+  remoteTokenBudget?: number;
+  allowedTools: string[];
+  approvalRequirement: "none" | "required";
+}
+
+export interface ExecutionStep {
+  schemaVersion: SchemaVersion;
+  id: string;
+  capability: CapabilityKind;
+  dependsOn?: string[];
+  inputArtifacts?: ArtifactReference[];
+  outputArtifactIds?: string[];
+  verificationGateIds?: string[];
+}
+
+export interface ExecutionPlan {
+  schemaVersion: SchemaVersion;
+  id: string;
+  createdAt: string;
+  steps: ExecutionStep[];
+  policy: ExecutionPolicy;
+  verificationGates?: VerificationGate[];
+}
+
+export interface RunEvent {
+  schemaVersion: SchemaVersion;
+  id: string;
+  runId: string;
+  occurredAt: string;
+  type: "step.started" | "step.completed" | "step.failed" | "run.cancelled";
+  stepId?: string;
+  artifact?: ArtifactReference;
+}
+
+export interface Run {
+  schemaVersion: SchemaVersion;
+  id: string;
+  planId: string;
+  createdAt: string;
+  status: RunStatus;
+  events: RunEvent[];
+}
+
+export interface RouteDecision {
+  schemaVersion: SchemaVersion;
+  id: string;
+  decidedAt: string;
+  capability: CapabilityKind;
+  backendId?: string;
+  reason: string;
+}
+
+export interface EgressRecord {
+  schemaVersion: SchemaVersion;
+  id: string;
+  occurredAt: string;
+  destination: "external" | "loopback";
+  approved: boolean;
+  reason: string;
+}
+
+export interface BackendSessionReference {
+  schemaVersion: SchemaVersion;
+  backendId: string;
+  sessionId: string;
+}

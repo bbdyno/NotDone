@@ -253,6 +253,10 @@ export interface Citation {
   schemaVersion: SchemaVersion;
   id: string;
   artifact: ArtifactReference;
+  sourceId?: string;
+  path?: string;
+  startLine?: number;
+  endLine?: number;
   locator?: string;
   label?: string;
 }
@@ -359,4 +363,68 @@ export interface BackendSessionReference {
   schemaVersion: SchemaVersion;
   backendId: string;
   sessionId: string;
+}
+
+export interface Source {
+  schemaVersion: SchemaVersion;
+  id: string;
+  kind: "local-folder";
+  root: string;
+}
+
+export interface DocumentIdentity {
+  schemaVersion: SchemaVersion;
+  sourceId: string;
+  path: string;
+}
+
+export interface DocumentVersion {
+  schemaVersion: SchemaVersion;
+  documentId: string;
+  digest: string;
+  modifiedAt: string;
+}
+
+export interface SourceDocument {
+  schemaVersion: SchemaVersion;
+  id: string;
+  identity: DocumentIdentity;
+  version: DocumentVersion;
+  title: string;
+}
+
+export interface Chunk {
+  schemaVersion: SchemaVersion;
+  id: string;
+  documentId: string;
+  digest: string;
+  title: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+}
+
+export interface SearchQuery {
+  schemaVersion: SchemaVersion;
+  id: string;
+  text: string;
+  limit: number;
+}
+
+export interface SearchResult {
+  schemaVersion: SchemaVersion;
+  chunkId: string;
+  sourceId: string;
+  path: string;
+  startLine: number;
+  endLine: number;
+  excerpt: string;
+  score: number;
+}
+
+export interface LocalIndex {
+  schemaVersion: SchemaVersion;
+  source: Source;
+  documents: SourceDocument[];
+  chunks: Chunk[];
 }

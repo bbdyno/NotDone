@@ -1,6 +1,7 @@
 export * from "./collector.js";
 export * from "./evaluator.js";
 export * from "./legacy-adapter.js";
+export * from "./local-retriever.js";
 export * from "./proof-packet.js";
 export * from "./runtime.js";
 export * from "./semantic-validation.js";

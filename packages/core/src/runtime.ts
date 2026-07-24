@@ -7,6 +7,7 @@ import {
   type ExecutionPlan,
   type ExecutionPolicy,
   type ExecutionStep,
+  type EvidenceBundle,
   type Run,
   type RunEvent,
   type VerificationReport,
@@ -31,6 +32,7 @@ export interface ExecutionContext {
 
 export interface BackendResult {
   artifacts?: Artifact[];
+  evidenceBundles?: EvidenceBundle[];
   verificationReports?: VerificationReport[];
 }
 
@@ -56,6 +58,7 @@ export interface RuntimeFailure {
 export interface RuntimeRunResult {
   run: Run;
   artifacts: Artifact[];
+  evidenceBundles: EvidenceBundle[];
   verificationReports: VerificationReport[];
   failure?: RuntimeFailure;
 }
@@ -122,6 +125,7 @@ export class ExecutionRuntime {
       events: [],
     };
     const artifacts = new Map<string, Artifact>();
+    const evidenceBundles: EvidenceBundle[] = [];
     const verificationReports: VerificationReport[] = [];
     const fail = (
       code: RuntimeFailureCode,
@@ -132,6 +136,7 @@ export class ExecutionRuntime {
       return {
         run,
         artifacts: [...artifacts.values()],
+        evidenceBundles,
         verificationReports,
         failure: {
           code,
@@ -209,6 +214,7 @@ export class ExecutionRuntime {
         }
         artifacts.set(artifact.id, artifact);
       }
+      evidenceBundles.push(...(result.evidenceBundles ?? []));
       verificationReports.push(...(result.verificationReports ?? []));
       run.events.push(
         event(run.id, run.events.length, "step.completed", now().toISOString(), step.id),
@@ -228,6 +234,7 @@ export class ExecutionRuntime {
     return {
       run,
       artifacts: [...artifacts.values()],
+      evidenceBundles,
       verificationReports,
     };
   }

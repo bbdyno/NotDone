@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "id": "local-documents",
+  "version": "1.0.0",
+  "displayName": "Local Documents",
+  "requiredRuntimeVersion": "1.0",
+  "sourceAdapters": ["local-folder"],
+  "retrieval": { "strategy": "lexical" },
+  "contextCompiler": { "maxCharacters": 6000 },
+  "availablePlans": ["retrieve", "run"],
+  "verificationGates": ["citation-check"],
+  "permissions": {
+    "readPaths": ["documents/**"],
+    "artifactWritePaths": ["artifacts/local-documents/**"],
+    "loopback": false,
+    "externalNetwork": false,
+    "tools": [],
+    "backends": ["local-lexical-retriever"],
+    "dataClassifications": ["private"]
+  },
+  "networkRequirement": "none",
+  "configurationSchema": { "type": "object" },
+  "outputContract": "evidence-bundle"
+}

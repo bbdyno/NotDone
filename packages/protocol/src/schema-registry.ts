@@ -11,6 +11,9 @@ import evidenceSchema from "../../../schemas/evidence.schema.json" with {
 import executionPlanSchema from "../../../schemas/execution-plan.schema.json" with {
   type: "json",
 };
+import packManifestSchema from "../../../schemas/pack-manifest.schema.json" with {
+  type: "json",
+};
 import proofPacketSchema from "../../../schemas/proof-packet.schema.json" with {
   type: "json",
 };
@@ -26,6 +29,7 @@ import verificationResultSchema from "../../../schemas/verification-result.schem
 import type {
   EvidenceRecord,
   ExecutionPlan,
+  PackManifest,
   ProofPacket,
   RuntimeEvent,
   TaskContract,
@@ -44,6 +48,7 @@ for (const schema of [
   taskContractSchema,
   evidenceSchema,
   executionPlanSchema,
+  packManifestSchema,
   runtimeEventSchema,
   verificationResultSchema,
   proofPacketSchema,
@@ -67,6 +72,9 @@ const evidenceValidator = getValidator<EvidenceRecord>(
 );
 const executionPlanValidator = getValidator<ExecutionPlan>(
   "urn:notdone:schema:execution-plan:v1",
+);
+const packManifestValidator = getValidator<PackManifest>(
+  "urn:notdone:schema:pack-manifest:v1",
 );
 const runtimeEventValidator = getValidator<RuntimeEvent>(
   "urn:notdone:schema:runtime-event:v1",
@@ -182,6 +190,10 @@ export const validateExecutionPlan = (
   return errors.length === 0 ? result : { valid: false, errors };
 };
 
+export const validatePackManifest = (
+  value: unknown,
+): ValidationResult<PackManifest> => validate(packManifestValidator, value);
+
 export const validateRuntimeEvent = (
   value: unknown,
 ): ValidationResult<RuntimeEvent> => validate(runtimeEventValidator, value);
@@ -225,6 +237,13 @@ export function assertExecutionPlan(
   const result = validateExecutionPlan(value);
   if (!result.valid) {
     throw new SchemaValidationError("Execution plan", result.errors);
+  }
+}
+
+export function assertPackManifest(value: unknown): asserts value is PackManifest {
+  const result = validatePackManifest(value);
+  if (!result.valid) {
+    throw new SchemaValidationError("Pack manifest", result.errors);
   }
 }
 

@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:notdone:schema:pack-manifest:v1",
+  "title": "NotDone Declarative Capability Pack",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "version", "displayName", "requiredRuntimeVersion", "sourceAdapters", "retrieval", "contextCompiler", "availablePlans", "verificationGates", "permissions", "networkRequirement", "configurationSchema", "outputContract"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/id" },
+    "version": { "$ref": "#/$defs/version" },
+    "displayName": { "type": "string", "minLength": 1, "maxLength": 120 },
+    "requiredRuntimeVersion": { "$ref": "#/$defs/runtimeVersion" },
+    "sourceAdapters": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+    "retrieval": { "type": "object", "additionalProperties": false, "required": ["strategy"], "properties": { "strategy": { "enum": ["none", "lexical", "hybrid"] } } },
+    "contextCompiler": { "type": "object", "additionalProperties": false, "required": ["maxCharacters"], "properties": { "maxCharacters": { "type": "integer", "minimum": 0 } } },
+    "availablePlans": { "type": "array", "minItems": 1, "items": { "enum": ["retrieve", "verify", "run"] }, "uniqueItems": true },
+    "verificationGates": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+    "permissions": { "$ref": "#/$defs/permissions" },
+    "networkRequirement": { "enum": ["none", "loopback", "external"] },
+    "configurationSchema": { "type": "object" },
+    "outputContract": { "$ref": "#/$defs/id" }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,62}$" },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "runtimeVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "pathScope": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(^|/)\\.\\.(/|$)).+$" },
+    "permissions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["readPaths", "artifactWritePaths", "loopback", "externalNetwork", "tools", "backends", "dataClassifications"],
+      "properties": {
+        "readPaths": { "type": "array", "items": { "$ref": "#/$defs/pathScope" }, "uniqueItems": true },
+        "artifactWritePaths": { "type": "array", "items": { "$ref": "#/$defs/pathScope" }, "uniqueItems": true },
+        "loopback": { "type": "boolean" },
+        "externalNetwork": { "type": "boolean" },
+        "tools": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+        "backends": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true },
+        "dataClassifications": { "type": "array", "items": { "$ref": "#/$defs/id" }, "uniqueItems": true }
+      }
+    }
+  }
+}

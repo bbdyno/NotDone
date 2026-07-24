@@ -223,6 +223,33 @@ export interface ProofPacket {
 
 export type CapabilityKind = "retrieve" | "verify" | "run";
 
+export interface PackPermissions {
+  readPaths: string[];
+  artifactWritePaths: string[];
+  loopback: boolean;
+  externalNetwork: boolean;
+  tools: string[];
+  backends: string[];
+  dataClassifications: string[];
+}
+
+export interface PackManifest {
+  schemaVersion: SchemaVersion;
+  id: string;
+  version: string;
+  displayName: string;
+  requiredRuntimeVersion: string;
+  sourceAdapters: string[];
+  retrieval: { strategy: "none" | "lexical" | "hybrid" };
+  contextCompiler: { maxCharacters: number };
+  availablePlans: CapabilityKind[];
+  verificationGates: string[];
+  permissions: PackPermissions;
+  networkRequirement: "none" | "loopback" | "external";
+  configurationSchema: Record<string, JsonValue>;
+  outputContract: string;
+}
+
 export type RunStatus =
   | "pending"
   | "running"

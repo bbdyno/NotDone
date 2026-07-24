@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "1.0",
+  "id": "verification",
+  "version": "1.0.0",
+  "displayName": "Verification",
+  "requiredRuntimeVersion": "1.0",
+  "sourceAdapters": [],
+  "retrieval": { "strategy": "none" },
+  "contextCompiler": { "maxCharacters": 0 },
+  "availablePlans": ["verify"],
+  "verificationGates": ["schema-check", "file-check", "command-check"],
+  "permissions": {
+    "readPaths": ["artifacts/**"],
+    "artifactWritePaths": ["artifacts/verification/**"],
+    "loopback": false,
+    "externalNetwork": false,
+    "tools": ["command"],
+    "backends": ["local-verifier"],
+    "dataClassifications": ["private"]
+  },
+  "networkRequirement": "none",
+  "configurationSchema": { "type": "object" },
+  "outputContract": "verification-report"
+}

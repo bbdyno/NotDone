@@ -6,6 +6,7 @@ export * from "./local-retriever.js";
 export * from "./local-model.js";
 export * from "./proof-packet.js";
 export * from "./policy-router.js";
+export * from "./packs.js";
 export * from "./runtime.js";
 export * from "./remote-model.js";
 export * from "./semantic-validation.js";

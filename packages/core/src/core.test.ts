@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { promisify } from "node:util";
 
 import {
   SCHEMA_VERSION,
@@ -21,6 +23,7 @@ import { meetsTrustRequirement } from "./trust.js";
 import { verifyWorkspace } from "./verify.js";
 
 const timestamp = "2026-07-20T05:00:00.000Z";
+const execFileAsync = promisify(execFile);
 
 function contractWithChecks(
   checks: TaskContract["claims"][number]["checks"],
@@ -237,5 +240,91 @@ describe("collection and proof packets", () => {
 
     expect(evidence).toEqual([]);
     expect(result.status).toBe("blocked");
+  });
+
+  it("records untracked files for git-diff checks", async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), "notdone-core-"));
+    await execFileAsync("git", ["init", "--quiet"], { cwd: workspaceRoot });
+    await execFileAsync(
+      "git",
+      [
+        "-c",
+        "user.name=NotDone test",
+        "-c",
+        "user.email=notdone-test@example.invalid",
+        "commit",
+        "--allow-empty",
+        "--quiet",
+        "-m",
+        "Initial test commit",
+      ],
+      { cwd: workspaceRoot },
+    );
+    await writeFile(join(workspaceRoot, "proof.txt"), "created evidence\n");
+    const contract = contractWithChecks([
+      {
+        id: "check.diff",
+        type: "git-diff",
+        allowedPaths: ["proof.txt"],
+        requiredPaths: ["proof.txt"],
+      },
+    ]);
+
+    const packet = await verifyWorkspace({
+      contract,
+      runId: "run.git-diff",
+      workspaceRoot,
+      now: () => new Date(timestamp),
+      evaluatedAt: timestamp,
+    });
+
+    expect(packet.result.status).toBe("verified");
+    expect(packet.evidence[0]?.metadata).toMatchObject({
+      passed: true,
+      changedPaths: ["proof.txt"],
+    });
+  });
+
+  it("keeps command output out of collected evidence and rejects escaping file paths", async () => {
+    const workspaceRoot = await mkdtemp(join(tmpdir(), "notdone-core-"));
+    const commandContract = contractWithChecks([
+      {
+        id: "check.command-output",
+        type: "command",
+        command:
+          'node -e "process.stdout.write(\'private command output\'.toUpperCase())"',
+        expect: {
+          exitCode: 0,
+          stdoutIncludes: "PRIVATE COMMAND OUTPUT",
+        },
+      },
+    ]);
+
+    const [evidence] = await collectEvidence({
+      contract: commandContract,
+      runId: "run.command-output",
+      workspaceRoot,
+      now: () => new Date(timestamp),
+    });
+
+    expect(evidence?.command?.stdoutDigest).toMatch(/^[a-f0-9]{64}$/);
+    expect(JSON.stringify(evidence)).not.toContain("PRIVATE COMMAND OUTPUT");
+
+    await expect(
+      collectEvidence({
+        contract: contractWithChecks([
+          {
+            id: "check.outside-file",
+            type: "file",
+            path: "../outside.txt",
+            expect: {
+              exists: false,
+            },
+          },
+        ]),
+        runId: "run.outside-file",
+        workspaceRoot,
+      }),
+    ).rejects.toThrow("Path escapes the workspace");
   });
 });

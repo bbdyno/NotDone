@@ -36,7 +36,7 @@ describe("Codex exec adapter", () => {
   it("starts with argv/stdin, streams JSON, redacts transcripts, and records changed files", async () => {
     const process = new FakeProcess(); const spawner = new FakeSpawner(process); const result = backend(spawner).execute(context());
     process.emitStdout('{"type":"item.completed","item":{"type":"agent_message","text":"done sk_secretvalue"},"changed_files":["src/a.ts"]}\n'); process.close(0);
-    await expect(result).resolves.toMatchObject({ artifacts: [{ metadata: { changedFiles: ["src/a.ts"], finalMessage: "done [redacted]", exitStatus: 0 } }] });
+    await expect(result).resolves.toMatchObject({ artifacts: [{ digest: expect.stringMatching(/^(?!0{64}$)[a-f0-9]{64}$/u), metadata: { changedFiles: ["src/a.ts"], finalMessage: "done [redacted]", exitStatus: 0 } }] });
     expect(spawner.calls[0]?.[0]?.args.slice(0, 5)).toEqual(["exec", "--ephemeral", "--json", "--sandbox", "workspace-write"]);
     expect(spawner.calls[0]?.[0]?.env).toMatchObject({ PATH: "/bin", GIT_TERMINAL_PROMPT: "0" });
     expect(process.stdin).toContain("do not run git push"); expect(process.stdin).not.toContain("SECRET");

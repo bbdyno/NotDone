@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { createHash } from "node:crypto";
 
 import type {
   CancellationHandle,
@@ -140,7 +141,8 @@ export class CodexExecBackend implements ExecutionBackend {
         if (exitCode !== 0) { rejectResult(new CodexExecError("failed", `Codex exec exited with code ${exitCode ?? -1}: ${redaction(stderr)}`)); return; }
         try {
           const transcript = parseTranscript(stdout);
-          resolveResult({ artifacts: [{ schemaVersion: SCHEMA_VERSION, id: `artifact.codex.${context.run.id}.${context.step.id}`, createdAt: new Date().toISOString(), mediaType: "application/vnd.notdone.codex-exec+json", size: Buffer.byteLength(stdout) + Buffer.byteLength(stderr), digest: "0".repeat(64), metadata: { exitStatus: exitCode, durationMs: Date.now() - startedAt, changedFiles: transcript.changedFiles, ...(transcript.finalMessage === undefined ? {} : { finalMessage: (this.options.redact ?? redaction)(transcript.finalMessage) }), stderr: (this.options.redact ?? redaction)(stderr) } }] });
+          const metadata = { exitStatus: exitCode, durationMs: Date.now() - startedAt, changedFiles: transcript.changedFiles, ...(transcript.finalMessage === undefined ? {} : { finalMessage: (this.options.redact ?? redaction)(transcript.finalMessage) }), stderr: (this.options.redact ?? redaction)(stderr) };
+          resolveResult({ artifacts: [{ schemaVersion: SCHEMA_VERSION, id: `artifact.codex.${context.run.id}.${context.step.id}`, createdAt: new Date().toISOString(), mediaType: "application/vnd.notdone.codex-exec+json", size: Buffer.byteLength(JSON.stringify(metadata)), digest: createHash("sha256").update(JSON.stringify(metadata)).digest("hex"), metadata }] });
         } catch (error) { rejectResult(error); }
       }));
       process.writeStdin(prompt);

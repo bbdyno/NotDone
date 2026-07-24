@@ -7,6 +7,8 @@ public release candidate is versioned `0.1.0`.
 
 ## Unreleased
 
+## 0.1.0 - 2026-07-25
+
 ### Added
 
 - Apache 2.0 project foundation, governance, security, contribution, and
@@ -27,3 +29,10 @@ public release candidate is versioned `0.1.0`.
 - Standalone npm tarball builds with clean-install CLI and MCP probes.
 - Node.js 22/24 CI, dependency review, release checksums, npm provenance, and
   GitHub build attestations.
+- Provider-neutral execution plans, policy-first routing, local lexical
+  retrieval, context compilation, and independent verify-only gates.
+- Declarative capability Packs, optional local/remote model boundaries, and
+  policy-controlled Codex Exec and App Server adapters with fake transport
+  coverage.
+- CLI visibility for local retrieval, workflow route/egress/verification state,
+  backend and Pack discovery, plus a self-contained runtime overview SVG.

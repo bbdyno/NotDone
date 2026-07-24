@@ -146,4 +146,26 @@ describe("notdone CLI", () => {
     ).toBe(exitCodes.failed);
     expect(stdout[0]).toContain("Verification failed");
   });
+
+  it("retrieves local evidence without a model and exposes citations", async () => {
+    await writeFile(join(cwd, "notes.md"), "# Notes\n\nNotDone retrieval keeps citations local.\n");
+    expect(await runCli(["retrieve", "citations", "--json"], context)).toBe(exitCodes.success);
+    expect(JSON.parse(stdout.join("\n"))).toMatchObject({ mode: "retrieve", status: "RESULTS", route: { kind: "local" } });
+  });
+
+  it("explains composed workflows, denied profiles, and unavailable model execution", async () => {
+    await writeFile(join(cwd, "notes.md"), "retrieval evidence\n");
+    expect(await runCli(["run", "retrieve-model-verify", "evidence", "--profile", "Private", "--json"], context)).toBe(exitCodes.blocked);
+    expect(JSON.parse(stdout.join("\n"))).toMatchObject({ mode: "retrieve-model-verify", egress: { externalNetwork: "denied" }, retrieval: { status: "RESULTS" }, execution: { status: "BACKEND_UNAVAILABLE" }, verification: { status: "PENDING" } });
+  });
+
+  it("lists product backends, packs, and command help", async () => {
+    expect(await runCli(["backends", "--json"], context)).toBe(exitCodes.success);
+    expect(JSON.parse(stdout.join("\n")).backends).toEqual(expect.arrayContaining([expect.objectContaining({ id: "local-lexical-retriever", status: "available" })]));
+    stdout = []; context.stdout = (line) => stdout.push(line);
+    expect(await runCli(["packs", "--json"], context)).toBe(exitCodes.success);
+    expect(JSON.parse(stdout.join("\n")).packs).toEqual(expect.arrayContaining([expect.objectContaining({ id: "local-documents" })]));
+    stdout = []; context.stdout = (line) => stdout.push(line);
+    await runCli(["--help"], context); expect(stdout.join("\n")).toContain("notdone retrieve");
+  });
 });

@@ -6,6 +6,9 @@ import { resolve } from "node:path";
 
 import {
   collectEvidence,
+  LocalFolderIndex,
+  LocalRetriever,
+  loadPackManifest,
   verifyProofPacketIntegrity,
   verifyWorkspace,
   assertValidContract,
@@ -13,6 +16,7 @@ import {
 import {
   assertProofPacket,
   type ProofPacket,
+  type SearchQuery,
   type TaskContract,
   type VerificationStatus,
 } from "@notdone/protocol";
@@ -47,6 +51,8 @@ interface ParsedArguments {
   json: boolean;
   output?: string;
   runId?: string;
+  limit?: number;
+  profile?: "Private" | "Saver" | "Quality";
 }
 
 class CliUsageError extends Error {
@@ -64,6 +70,10 @@ Usage:
   notdone evidence collect [contract-path] [--run-id ID] [--output PATH] [--json]
   notdone verify [contract-path] [--run-id ID] [--output PATH] [--json]
   notdone proof inspect <proof-path> [--json]
+  notdone retrieve <query> [source-root] [--limit N] [--json]
+  notdone run <retrieve|verify|model|retrieve-model|model-verify|retrieve-model-verify> [query] [--profile Private|Saver|Quality] [--json]
+  notdone backends [--json]
+  notdone packs [--json]
   notdone --version
 
 Exit codes:
@@ -91,6 +101,8 @@ function parseArguments(args: string[]): ParsedArguments {
   let json = false;
   let output: string | undefined;
   let runId: string | undefined;
+  let limit: number | undefined;
+  let profile: ParsedArguments["profile"];
 
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index];
@@ -98,15 +110,23 @@ function parseArguments(args: string[]): ParsedArguments {
       json = true;
       continue;
     }
-    if (argument === "--output" || argument === "--run-id") {
+    if (argument === "--output" || argument === "--run-id" || argument === "--limit" || argument === "--profile") {
       const value = args[index + 1];
       if (value === undefined || value.startsWith("--")) {
         throw new CliUsageError(`${argument} requires a value.`);
       }
       if (argument === "--output") {
         output = value;
-      } else {
+      } else if (argument === "--run-id") {
         runId = value;
+      } else if (argument === "--limit") {
+        const parsedLimit = Number(value);
+        if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100) throw new CliUsageError("--limit must be an integer from 1 to 100.");
+        limit = parsedLimit;
+      } else if (value === "Private" || value === "Saver" || value === "Quality") {
+        profile = value;
+      } else {
+        throw new CliUsageError("--profile must be Private, Saver, or Quality.");
       }
       index += 1;
       continue;
@@ -124,6 +144,8 @@ function parseArguments(args: string[]): ParsedArguments {
     json,
     ...(output === undefined ? {} : { output }),
     ...(runId === undefined ? {} : { runId }),
+    ...(limit === undefined ? {} : { limit }),
+    ...(profile === undefined ? {} : { profile }),
   };
 }
 
@@ -313,6 +335,56 @@ async function verifyCommand(
   return resultExitCode(packet.result.status);
 }
 
+async function retrieveCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseArguments(args);
+  if (parsed.positional.length < 1 || parsed.positional.length > 2) throw new CliUsageError("retrieve requires a query and accepts an optional source root.");
+  const root = absolutePath(context.cwd, parsed.positional[1] ?? ".");
+  const index = await LocalFolderIndex.open(root);
+  const retriever = new LocalRetriever(index);
+  const query: SearchQuery = { schemaVersion: "1.0", id: `query.${generatedRunId(context.now())}`, text: parsed.positional[0]!, limit: parsed.limit ?? 10 };
+  const outcome = await retriever.retrieve(query, context.now().toISOString());
+  const output = { mode: "retrieve", route: { kind: "local", reason: "Local lexical retrieval does not require a model or network." }, status: outcome.status === "abstain" ? "ABSTAIN" : "RESULTS", source: index.source, results: outcome.results, citations: outcome.evidenceBundle.evidence.flatMap((item) => item.citations ?? []), artifact: outcome.evidenceBundle };
+  if (parsed.json) printJson(context, output); else { context.stdout(`Retrieve ${output.status}: ${outcome.results.length} result(s), local-only route.`); for (const result of outcome.results) context.stdout(`- ${result.path}:${result.startLine}-${result.endLine}`); }
+  return exitCodes.success;
+}
+
+const runModes = new Set(["retrieve", "verify", "model", "retrieve-model", "model-verify", "retrieve-model-verify"]);
+
+async function runCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseArguments(args);
+  const mode = parsed.positional[0];
+  if (mode === undefined || !runModes.has(mode) || parsed.positional.length > 2) throw new CliUsageError("run requires a supported workflow mode and optional retrieval query.");
+  const profile = parsed.profile ?? "Private";
+  const includesRetrieve = mode.includes("retrieve");
+  const includesModel = mode.includes("model");
+  const includesVerify = mode.includes("verify");
+  const output: Record<string, unknown> = { mode, profile, route: includesModel ? { kind: "unavailable", reason: profile === "Private" ? "External model execution is denied by the Private profile." : "No model backend is configured for this CLI command." } : { kind: includesRetrieve ? "local" : "verify-only", reason: includesRetrieve ? "Local retrieval is model-free." : "Use the existing verify workflow without retrieval." }, egress: { externalNetwork: profile === "Private" ? "denied" : "approval-required", tokenUsage: 0 }, verification: includesVerify ? { status: "PENDING", reason: "Run `notdone verify` with a task contract to produce independent proof." } : { status: "NOT_REQUESTED" }, approval: includesModel && profile !== "Private" ? "required" : "not-required" };
+  if (includesRetrieve) {
+    const query = parsed.positional[1] ?? "";
+    if (query.length === 0) throw new CliUsageError("retrieve workflows require a query.");
+    const index = await LocalFolderIndex.open(context.cwd);
+    const outcome = await new LocalRetriever(index).retrieve({ schemaVersion: "1.0", id: `query.${generatedRunId(context.now())}`, text: query, limit: parsed.limit ?? 10 }, context.now().toISOString());
+    output.retrieval = { status: outcome.status === "abstain" ? "ABSTAIN" : "RESULTS", citations: outcome.evidenceBundle.evidence.flatMap((item) => item.citations ?? []), artifact: outcome.evidenceBundle };
+  }
+  if (includesModel) output.execution = { status: "BACKEND_UNAVAILABLE", retry: "Configure a permitted local or approved remote model backend before execution." };
+  if (parsed.json) printJson(context, output); else context.stdout(`Workflow ${mode}: ${includesModel ? "model backend unavailable" : "ready"}; profile ${profile}.`);
+  return includesModel ? exitCodes.blocked : exitCodes.success;
+}
+
+async function packsCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseArguments(args); if (parsed.positional.length !== 0) throw new CliUsageError("packs does not accept positional arguments.");
+  const packs = await Promise.all(["local-documents", "verification"].map(async (id) => loadPackManifest(new URL(`../../../packs/${id}/pack.json`, import.meta.url).pathname)));
+  if (parsed.json) printJson(context, { packs }); else for (const pack of packs) context.stdout(`${pack.id} ${pack.version}: ${pack.displayName} (${pack.availablePlans.join(", ")})`);
+  return exitCodes.success;
+}
+
+async function backendsCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseArguments(args); if (parsed.positional.length !== 0) throw new CliUsageError("backends does not accept positional arguments.");
+  const backends = [{ id: "local-lexical-retriever", status: "available", locality: "local" }, { id: "verify-only", status: "available", locality: "local" }, { id: "loopback-openai-compatible", status: "not-configured", locality: "local" }, { id: "codex-exec", status: "optional", locality: "external" }];
+  if (parsed.json) printJson(context, { backends }); else for (const backend of backends) context.stdout(`${backend.id}: ${backend.status} (${backend.locality})`);
+  return exitCodes.success;
+}
+
 function proofSummary(packet: ProofPacket, path: string) {
   return {
     valid: true,
@@ -384,6 +456,10 @@ async function dispatch(
       context,
     );
   }
+  if (command === "retrieve") return retrieveCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "run") return runCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "packs") return packsCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "backends") return backendsCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
   if (command === "contract" && subcommand === "validate") {
     return validateContractCommand(rest, context);
   }

@@ -7,6 +7,7 @@ export * from "./local-model.js";
 export * from "./proof-packet.js";
 export * from "./policy-router.js";
 export * from "./runtime.js";
+export * from "./remote-model.js";
 export * from "./semantic-validation.js";
 export * from "./trust.js";
 export * from "./verify.js";

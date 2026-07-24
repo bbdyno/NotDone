@@ -11,6 +11,9 @@
       "path": "./packages/adapters/codex-exec"
     },
     {
+      "path": "./packages/adapters/codex-app-server"
+    },
+    {
       "path": "./packages/cli"
     },
     {

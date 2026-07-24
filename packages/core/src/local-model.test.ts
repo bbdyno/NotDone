@@ -1,0 +1,6 @@
+import { describe, expect, it } from "vitest";
+import { LocalModelError, LoopbackModelBackend } from "./local-model.js";
+describe("loopback model backend", () => {
+  it("probes and serializes structured requests without provider SDKs", async () => { const calls: unknown[] = []; const backend = new LoopbackModelBackend("http://127.0.0.1:11434", { request: async (path, body) => { calls.push([path, body]); return path === "/models" ? { status: 200, body: {} } : { status: 200, body: { choices: [{ message: { content: "ok [citation:c1]" } }] } }; } }); expect((await backend.health()).health).toBe("available"); expect(await backend.complete({ context: "compiled", structuredOutput: true })).toMatchObject({ text: "ok [citation:c1]", citationIds: ["c1"] }); expect(JSON.stringify(calls)).toContain("response_format"); });
+  it("remains unavailable without endpoint and rejects external URLs", async () => { const transport = { request: async () => ({ status: 500, body: {} }) }; await expect(new LoopbackModelBackend(undefined, transport).complete({ context: "x" })).rejects.toBeInstanceOf(LocalModelError); expect(() => new LoopbackModelBackend("https://example.com", transport)).toThrow("loopback"); });
+});

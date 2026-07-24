@@ -1,4 +1,4 @@
-<!-- docs-revision: 2 -->
+<!-- docs-revision: 3 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.0--rc-orange" alt="ステータス: v0.1.0 リリース候補">
+  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="ステータス: v0.1.1">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="ライセンス: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 以降">
@@ -32,8 +32,8 @@
 
 NotDone は、AI コーディングエージェント向けのランタイム中立な完了証明レイヤーです。完了条件を機械可読な契約として固定し、実際のツールから証拠を収集して、エージェントがタスクを完了したと言えるかを独立して検証します。
 
-> [!WARNING]
-> v0.1.0 の実装はリリース候補です。ソースビルド、独立したパッケージ成果物、3 つのランタイム連携は検証済みですが、この作業コピーから npm パッケージと GitHub Release はまだ公開していません。
+> [!NOTE]
+> v0.1.1 が現在のリリースです。ソースビルド、独立した npm パッケージ、3 つのランタイム連携はリリースワークフローで検証されます。
 
 ## なぜ NotDone なのか
 
@@ -72,8 +72,7 @@ npm install --global ./packages/cli ./packages/mcp-server
 
 ### CLI
 
-v0.1.0 の npm リリース後は、2 つの独立パッケージを次のように
-インストールします。
+npm から 2 つの独立パッケージを次のようにインストールします。
 
 ```shell
 npm install --global notdone notdone-mcp
@@ -192,7 +191,7 @@ claims:
 
 ## プロジェクト状況
 
-v0.1.0 リリース候補には次の機能が含まれます。
+v0.1.1 リリースには次の機能が含まれます。
 
 - バージョン付き protocol schema、canonical JSON、SHA-256 packet integrity
 - 決定的な command、file、Git diff 検証
@@ -202,7 +201,7 @@ v0.1.0 リリース候補には次の機能が含まれます。
 - Node.js 22/24 CI、パッケージインストールテスト、依存関係レビュー、
   リリース checksum、npm provenance、GitHub build attestation
 
-残るリリース作業は npm パッケージと `v0.1.0` GitHub Release の公開です。
+リリース成果物と検証手順は GitHub Release で確認できます。
 詳しくは [ROADMAP.md](ROADMAP.md)、[プロトコル](docs/protocol.md)、
 [CLI リファレンス](docs/cli.md)、[MCP リファレンス](docs/mcp.md)、
 [リリース手順](RELEASING.md)を参照してください。

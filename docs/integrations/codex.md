@@ -16,7 +16,7 @@ codex plugin marketplace add .
 codex plugin add notdone@notdone-marketplace
 ```
 
-After the v0.1.0 release, install `notdone` and `notdone-mcp` from npm and
+Install `notdone` and `notdone-mcp` from npm and
 replace `.` with `bbdyno/NotDone`.
 
 Open `/hooks` in Codex and review the plugin hook definition. Codex does not run

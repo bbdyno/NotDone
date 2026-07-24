@@ -28,7 +28,7 @@ import {
 } from "./files.js";
 import { createContractTemplate } from "./template.js";
 
-export const CLI_VERSION = "0.1.0";
+export const CLI_VERSION = "0.1.1";
 export const DEFAULT_CONTRACT_PATH = ".notdone/contracts/notdone.json";
 
 export const exitCodes = {

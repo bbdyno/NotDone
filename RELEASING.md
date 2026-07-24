@@ -38,15 +38,15 @@ After the first release:
    pnpm check
    pnpm pack:release
    pnpm pack:verify
-   node scripts/check-release-version.mjs v0.1.0
+   node scripts/check-release-version.mjs v0.1.1
    ```
 
 4. Merge the release commit to `main`.
 5. Create and push an annotated version tag:
 
    ```sh
-   git tag -a v0.1.0 -m "NotDone v0.1.0"
-   git push origin v0.1.0
+   git tag -a v0.1.1 -m "NotDone v0.1.1"
+   git push origin v0.1.1
    ```
 
 The tag workflow verifies that the tagged commit belongs to `main`, repeats the
@@ -62,8 +62,8 @@ publishing it.
 ```sh
 npm view notdone version
 npm view notdone-mcp version
-gh release view v0.1.0
-gh attestation verify artifacts/notdone-0.1.0.tgz --repo bbdyno/NotDone
+gh release view v0.1.1
+gh attestation verify artifacts/notdone-0.1.1.tgz --repo bbdyno/NotDone
 ```
 
 Confirm that both package versions, checksums, provenance, release notes, and

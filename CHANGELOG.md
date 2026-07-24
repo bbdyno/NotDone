@@ -7,6 +7,14 @@ public release candidate is versioned `0.1.0`.
 
 ## Unreleased
 
+## 0.1.1 - 2026-07-25
+
+### Changed
+
+- Published the composable runtime expansion from the validated `main` branch.
+- Fixed npm registry ownership checks to accept npm's flattened
+  `repository.url` metadata format during idempotent release publication.
+
 ## 0.1.0 - 2026-07-25
 
 ### Added

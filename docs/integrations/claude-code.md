@@ -16,7 +16,7 @@ claude plugin marketplace add .
 claude plugin install notdone@notdone-marketplace
 ```
 
-After the v0.1.0 release, install `notdone` and `notdone-mcp` from npm and use
+Install `notdone` and `notdone-mcp` from npm and use
 `claude plugin marketplace add bbdyno/NotDone` for the remote marketplace.
 
 Claude Code asks users to approve local MCP servers. Review the `notdone-mcp`

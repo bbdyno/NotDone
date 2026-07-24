@@ -9,7 +9,7 @@ const readmes = [
 ];
 
 const requiredTokens = [
-  "<!-- docs-revision: 2 -->",
+  "<!-- docs-revision: 3 -->",
   "English",
   "한국어",
   "日本語",
@@ -17,7 +17,7 @@ const requiredTokens = [
   "繁體中文",
   "Apache--2.0",
   "actions/workflows/ci.yml/badge.svg",
-  "status-v0.1.0--rc",
+  "status-v0.1.1-blue",
   "Node.js-%3E%3D22",
   "Claude_Code",
   "Codex",

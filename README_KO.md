@@ -1,4 +1,4 @@
-<!-- docs-revision: 2 -->
+<!-- docs-revision: 3 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.0--rc-orange" alt="상태: v0.1.0 릴리스 후보">
+  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="상태: v0.1.1">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="라이선스: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 이상">
@@ -32,8 +32,8 @@
 
 NotDone은 AI 코딩 에이전트를 위한 런타임 중립 완료 증명 계층입니다. 완료 조건을 기계가 읽을 수 있는 계약으로 고정하고, 실제 도구에서 증거를 수집한 뒤 에이전트가 작업을 완료했다고 말할 자격이 있는지 독립적으로 검증합니다.
 
-> [!WARNING]
-> v0.1.0 구현은 릴리스 후보 상태입니다. 소스 빌드, 독립 패키지 아티팩트, 세 런타임 연동 검증은 완료했지만 이 작업 사본에서는 아직 npm 패키지와 GitHub 릴리스를 공개하지 않았습니다.
+> [!NOTE]
+> v0.1.1이 현재 릴리스입니다. 소스 빌드, 독립 npm 패키지, 세 런타임 연동은 릴리스 워크플로에서 검증됩니다.
 
 ## 왜 필요한가요?
 
@@ -72,7 +72,7 @@ npm install --global ./packages/cli ./packages/mcp-server
 
 ### CLI
 
-v0.1.0 npm 릴리스 후에는 두 독립 패키지를 다음과 같이 설치합니다.
+npm에서 두 독립 패키지를 다음과 같이 설치합니다.
 
 ```shell
 npm install --global notdone notdone-mcp
@@ -193,7 +193,7 @@ claims:
 
 ## 프로젝트 상태
 
-v0.1.0 릴리스 후보에는 다음 기능이 포함되어 있습니다.
+v0.1.1 릴리스에는 다음 기능이 포함되어 있습니다.
 
 - 버전이 부여된 protocol schema, canonical JSON, SHA-256 packet integrity
 - 결정적인 command, file, Git diff 검증
@@ -203,7 +203,7 @@ v0.1.0 릴리스 후보에는 다음 기능이 포함되어 있습니다.
 - Node.js 22/24 CI, 패키지 설치 테스트, 의존성 검토, 릴리스 checksum,
   npm provenance, GitHub build attestation
 
-남은 릴리스 작업은 npm 패키지와 `v0.1.0` GitHub 릴리스 공개입니다. 자세한
+릴리스 아티팩트와 검증 방법은 GitHub 릴리스에서 확인할 수 있습니다. 자세한
 내용은 [ROADMAP.md](ROADMAP.md), [프로토콜](docs/protocol.md),
 [CLI 레퍼런스](docs/cli.md), [MCP 레퍼런스](docs/mcp.md),
 [릴리스 절차](RELEASING.md)를 참고하세요.

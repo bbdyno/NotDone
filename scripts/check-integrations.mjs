@@ -2,7 +2,7 @@ import { access, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
-const expectedVersion = "0.1.0";
+const expectedVersion = "0.1.1";
 
 async function readJson(path) {
   return JSON.parse(

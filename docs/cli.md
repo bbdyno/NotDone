@@ -5,7 +5,7 @@ commands and MCP tools delegate to the same operations.
 
 ## Install
 
-For the v0.1.0 release candidate, build and install from a source checkout:
+To build and install from a source checkout:
 
 ```shell
 pnpm install --frozen-lockfile

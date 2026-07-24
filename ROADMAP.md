@@ -12,7 +12,7 @@
 - [x] Cross-runtime conformance suite
 - [x] English, Korean, Japanese, Simplified Chinese, and Traditional Chinese guides
 - [x] Reproducible standalone package artifacts and release automation
-- [ ] Publish `notdone`, `notdone-mcp`, and the `v0.1.0` GitHub release
+- [x] Publish `notdone`, `notdone-mcp`, and a verified GitHub release
 
 ## After v0.1
 

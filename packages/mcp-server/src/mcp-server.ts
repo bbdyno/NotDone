@@ -100,7 +100,7 @@ export async function createNotDoneMcpServer({
   const server = new McpServer(
     {
       name: "notdone",
-      version: "0.1.0",
+      version: "0.1.1",
     },
     {
       instructions:

@@ -1,4 +1,4 @@
-<!-- docs-revision: 2 -->
+<!-- docs-revision: 3 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.0--rc-orange" alt="Status: v0.1.0 release candidate">
+  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="Status: v0.1.1">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 or later">
@@ -32,8 +32,8 @@
 
 NotDone is a runtime-neutral proof-of-completion layer for AI coding agents. It turns acceptance criteria into a machine-readable contract, captures evidence from real tools, and independently verifies whether an agent has earned the right to call a task complete.
 
-> [!WARNING]
-> The v0.1.0 implementation is a release candidate. Source builds, standalone package artifacts, and all three runtime integrations are validated, but the npm packages and GitHub release have not been published from this working copy yet.
+> [!NOTE]
+> v0.1.1 is the current release. Its source build, standalone npm packages, and all three runtime integrations are validated by the release workflow.
 
 ## Why NotDone?
 
@@ -74,7 +74,7 @@ npm install --global ./packages/cli ./packages/mcp-server
 
 ### CLI
 
-After the v0.1.0 npm release, install the two standalone packages with:
+Install the two standalone packages from npm with:
 
 ```shell
 npm install --global notdone notdone-mcp
@@ -199,7 +199,7 @@ The local v0.1 implementation targets an honest-but-fallible agent. It detects u
 
 ## Project status
 
-The v0.1.0 release candidate includes:
+The v0.1.1 release includes:
 
 - versioned protocol schemas, canonical JSON, and SHA-256 packet integrity;
 - deterministic command, file, and Git-diff verification;
@@ -209,8 +209,8 @@ The v0.1.0 release candidate includes:
 - Node.js 22/24 CI, package installation tests, dependency review, release
   checksums, npm provenance, and GitHub build attestations.
 
-Publication of the npm packages and the `v0.1.0` GitHub release is the remaining
-release operation. See [ROADMAP.md](ROADMAP.md), [the protocol](docs/protocol.md),
+Release artifacts and verification instructions are available from the GitHub
+release. See [ROADMAP.md](ROADMAP.md), [the protocol](docs/protocol.md),
 [CLI reference](docs/cli.md), [MCP reference](docs/mcp.md), and
 [release procedure](RELEASING.md).
 

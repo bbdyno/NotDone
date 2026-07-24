@@ -109,7 +109,7 @@ function probeMcpServer(command, cwd) {
           capabilities: {},
           clientInfo: {
             name: "notdone-package-verifier",
-            version: "0.1.0",
+            version: "0.1.1",
           },
         },
       })}\n`,
@@ -123,8 +123,8 @@ const artifacts = (await readdir(artifactsDirectory))
 
 if (
   artifacts.length !== 2 ||
-  !artifacts.includes("notdone-0.1.0.tgz") ||
-  !artifacts.includes("notdone-mcp-0.1.0.tgz")
+  !artifacts.includes("notdone-0.1.1.tgz") ||
+  !artifacts.includes("notdone-mcp-0.1.1.tgz")
 ) {
   throw new Error(`Unexpected release artifacts: ${artifacts.join(", ")}`);
 }
@@ -164,7 +164,7 @@ try {
 
   const notdonePath = resolve(installDirectory, "node_modules/.bin/notdone");
   const version = await run(notdonePath, ["--version"], installDirectory);
-  if (version.stdout.trim() !== "0.1.0") {
+  if (version.stdout.trim() !== "0.1.1") {
     throw new Error(`Unexpected CLI version: ${version.stdout.trim()}`);
   }
 

@@ -6,7 +6,7 @@ the same tool surface.
 
 ## Install
 
-Build and install the v0.1.0 release candidate from a source checkout:
+Build and install from a source checkout:
 
 ```shell
 pnpm install --frozen-lockfile

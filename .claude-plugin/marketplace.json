@@ -10,7 +10,7 @@
       "name": "notdone",
       "source": "./plugins/notdone-claude",
       "description": "Validate task contracts and gate completion on executable evidence.",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "author": {
         "name": "The NotDone Authors"
       },

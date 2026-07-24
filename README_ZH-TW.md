@@ -1,4 +1,4 @@
-<!-- docs-revision: 2 -->
+<!-- docs-revision: 3 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.0--rc-orange" alt="狀態: v0.1.0 發布候選版本">
+  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="狀態: v0.1.1">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="授權條款: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 或更新版本">
@@ -32,8 +32,8 @@
 
 NotDone 是提供給 AI 程式開發代理程式的執行環境中立完成證明層。它會把驗收條件凍結為機器可讀的合約，從實際工具收集證據，並獨立判定代理程式是否有資格宣稱工作已完成。
 
-> [!WARNING]
-> v0.1.0 實作目前是發布候選版本。原始碼建置、獨立套件成品與三個執行環境整合皆已驗證，但尚未從此工作副本發布 npm 套件與 GitHub Release。
+> [!NOTE]
+> v0.1.1 是目前版本。原始碼建置、獨立 npm 套件與三個執行環境整合皆由發布工作流程驗證。
 
 ## 為什麼需要 NotDone？
 
@@ -72,7 +72,7 @@ npm install --global ./packages/cli ./packages/mcp-server
 
 ### CLI
 
-v0.1.0 發布到 npm 後，請安裝下列兩個獨立套件：
+請從 npm 安裝下列兩個獨立套件：
 
 ```shell
 npm install --global notdone notdone-mcp
@@ -191,7 +191,7 @@ claims:
 
 ## 專案狀態
 
-v0.1.0 發布候選版本包含：
+v0.1.1 版本包含：
 
 - 具版本的 protocol schema、canonical JSON 與 SHA-256 packet integrity
 - 決定性的 command、file 與 Git diff 驗證
@@ -201,7 +201,7 @@ v0.1.0 發布候選版本包含：
 - Node.js 22/24 CI、套件安裝測試、相依性審查、發布 checksum、
   npm provenance 與 GitHub build attestation
 
-剩餘發布操作是公開 npm 套件與 `v0.1.0` GitHub Release。詳情請參閱
+發布成品與驗證說明可在 GitHub Release 中查看。詳情請參閱
 [ROADMAP.md](ROADMAP.md)、[協定](docs/protocol.md)、
 [CLI 參考](docs/cli.md)、[MCP 參考](docs/mcp.md)與
 [發布流程](RELEASING.md)。

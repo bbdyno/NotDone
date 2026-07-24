@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "notdone",
   "displayName": "NotDone",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Proof-of-completion verification for Claude Code",
   "author": {
     "name": "The NotDone Authors",

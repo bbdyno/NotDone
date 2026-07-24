@@ -14,7 +14,7 @@ gemini extensions link .
 gemini extensions validate .
 ```
 
-After the v0.1.0 release, install `notdone` and `notdone-mcp` from npm and use
+Install `notdone` and `notdone-mcp` from npm and use
 `gemini extensions install https://github.com/bbdyno/NotDone` for a remote
 installation.
 

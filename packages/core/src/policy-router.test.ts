@@ -1,0 +1,7 @@
+import { describe, expect, it } from "vitest";
+import { planRoute, recordRemoteUse, type PolicyProfile } from "./policy-router.js";
+const policy: PolicyProfile = { schemaVersion: "1.0", externalNetwork: "deny", loopback: "allow", allowedTools: [], approvalRequirement: "required", maxRemoteCalls: 0, maxRemoteInputTokens: 10, maxRemoteOutputTokens: 10, allowedBackends: [], allowedSourceClassifications: [], redactionRequired: true, humanApprovalRequired: true };
+describe("policy-first routing", () => {
+  it("routes local retrieve and verify deterministically without remote egress", () => { expect(planRoute({ capability: "retrieve", localAvailable: true, remoteAvailable: true }, policy).route.route).toBe("retrieve-only"); expect(planRoute({ capability: "verify", localAvailable: true, remoteAvailable: false }, policy).route.route).toBe("verify-only"); });
+  it("denies remote before selection and records only approved remote usage", () => { const denied = planRoute({ capability: "run", localAvailable: false, remoteAvailable: true, estimatedRemoteInputTokens: 1 }, policy); expect(denied.route.route).toBe("tool-only"); expect(denied.policyDeniedReason).toBeDefined(); expect(() => recordRemoteUse(denied, 1, 1)).toThrow(); const allowed = planRoute({ capability: "run", localAvailable: false, remoteAvailable: true, estimatedRemoteInputTokens: 1 }, { ...policy, externalNetwork: "allow", maxRemoteCalls: 1 }); expect(recordRemoteUse(allowed, 1, 2)).toMatchObject({ remoteCalls: 1, remoteInputTokens: 1, redacted: true }); });
+});

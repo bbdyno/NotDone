@@ -57,7 +57,9 @@ for (const releasePackage of packages) {
     const repository =
       typeof metadata.repository?.url === "string"
         ? metadata.repository.url
-        : "";
+        : typeof metadata["repository.url"] === "string"
+          ? metadata["repository.url"]
+          : "";
     if (
       metadata.name !== releasePackage.name ||
       metadata.version !== version ||

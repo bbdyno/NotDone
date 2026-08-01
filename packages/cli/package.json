@@ -36,6 +36,7 @@
   "scripts": {
     "build": "node ../../scripts/clean-package-dist.mjs && tsup && node ../../scripts/copy-package-assets.mjs dist",
     "test": "vitest run src",
+    "test:self": "vitest run src/harness-self.test.ts",
     "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {

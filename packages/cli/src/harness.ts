@@ -35,6 +35,7 @@ import {
 const RUN_COLLECTION = "notdone.public-cli.run-history.v1";
 const REQUEST_COLLECTION = "notdone.public-cli.request-bindings.v1";
 const EXECUTION_COLLECTION = "notdone.public-cli.execution-claims.v1";
+const ARTIFACT_MANIFEST_COLLECTION = "notdone.public-cli.run-artifact-manifest.v1";
 const DIGEST = /^[a-f0-9]{64}$/u;
 const MAX_EVIDENCE_BYTES = 32 * 1024 * 1024;
 const execFileAsync = promisify(execFile);
@@ -68,6 +69,14 @@ interface RunState {
   request?: HarnessRequest & { targetWorkspace: string };
   outcome?: { status: HarnessStatus; run?: Run; bindings: Record<string, DigestArtifactReference> };
   external: Record<string, DigestArtifactReference[]>;
+}
+
+interface RunArtifactManifestEntry {
+  schemaVersion: typeof SCHEMA_VERSION;
+  runId: string;
+  stage: "preflight" | "execution" | "verification";
+  role: string;
+  artifact: DigestArtifactReference;
 }
 
 function fail(message: string): never { throw new HarnessError(message); }
@@ -158,6 +167,40 @@ function eventIdentity(event: RunEvent): string { return sha256Json({ runId: eve
 
 async function appendEvent(store: FilesystemArtifactStore, event: RunEvent): Promise<void> {
   await store.storeImmutableRecord({ collection: RUN_COLLECTION, identity: eventIdentity(event), content: canonicalizeJson(event) });
+}
+
+function manifestIdentity(entry: Pick<RunArtifactManifestEntry, "runId" | "stage" | "role">): string {
+  return sha256Json({ runId: entry.runId, stage: entry.stage, role: entry.role });
+}
+
+async function appendRunArtifact(store: FilesystemArtifactStore, entry: RunArtifactManifestEntry): Promise<void> {
+  try {
+    await store.storeImmutableRecord({
+      collection: ARTIFACT_MANIFEST_COLLECTION,
+      identity: manifestIdentity(entry),
+      content: canonicalizeJson(entry),
+    });
+  } catch {
+    fail("Run artifact manifest conflicts with existing immutable content.");
+  }
+}
+
+function executionArtifactRole(artifact: Artifact): string | undefined {
+  if (artifact.id.endsWith(".terminal.events")) return "redacted-terminal-jsonl";
+  if (artifact.id.endsWith(".terminal.stderr")) return "redacted-stderr";
+  if (artifact.id.endsWith(".terminal.exit")) return "exit-record";
+  if (artifact.id.endsWith(".terminal.final")) return "structured-final-output";
+  if (artifact.mediaType === "application/vnd.notdone.codex-exec+json") return "codex-execution-summary";
+  return undefined;
+}
+
+async function appendExecutionArtifacts(store: FilesystemArtifactStore, runId: string, artifacts: readonly Artifact[]): Promise<void> {
+  for (const artifact of artifacts) {
+    const role = executionArtifactRole(artifact);
+    if (role !== undefined) {
+      await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId, stage: "execution", role, artifact: artifactReference(artifact) });
+    }
+  }
 }
 
 async function bindRequest(store: FilesystemArtifactStore, request: HarnessRequest, targetWorkspace: string): Promise<void> {
@@ -319,6 +362,7 @@ export async function runNextHarness({ artifactRoot, targetWorkspace, request, c
   catch { const result = publicState("BLOCKED", "preflight-failed"); await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, bindings: {} }) }); return result; }
   const snapshot = await store.store({ id: preflight.taskSnapshot.id, mediaType: preflight.taskSnapshot.mediaType, content: preflight.taskSnapshot.metadata.snapshotJson, metadata: preflight.taskSnapshot.metadata, createdAt: preflight.taskSnapshot.createdAt });
   if (snapshot.digest !== preflight.taskSnapshot.digest) fail("Task snapshot persistence failed integrity validation.");
+  await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "preflight", role: "immutable-task-snapshot", artifact: artifactReference(snapshot) });
   const backend = context.createBackend?.(request, store) ?? new CodexExecBackend(new NodeCodexProcessSpawner(), { workspaceRoot: preflight.repository.root, executable: request.codex?.executable ?? "codex", timeoutMs: request.codex?.timeoutMs ?? 30 * 60_000, approved: true, promptFor: () => request.prompt, artifactStore: store });
   return executeBound({ store, request, preflight, backend, context });
 }
@@ -347,6 +391,7 @@ async function executeBound({ store, request, preflight, backend, context }: { s
     })),
   };
   const runtimeResult = await new ExecutionRuntime([backend]).execute(runtimePlan, { runId: request.runId, now: context.now });
+  await appendExecutionArtifacts(store, request.runId, runtimeResult.artifacts);
   if (runtimeResult.run.status !== "succeeded") {
     const result = publicState("FAILED", "codex-execution-failed");
     await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings: {} }) });
@@ -354,9 +399,12 @@ async function executeBound({ store, request, preflight, backend, context }: { s
   }
   const proof = await verifyWorkspace({ contract: request.contract, runId: request.runId, workspaceRoot: preflight.repository.root, now: context.now, evaluatedAt: context.now().toISOString() });
   const proofArtifact = await store.store({ id: `artifact.verification-proof.${sha256Json({ runId: request.runId, digest: sha256Json(proof) }).slice(0, 32)}`, mediaType: "application/vnd.notdone.proof-packet+json", content: canonicalizeJson(proof), createdAt: proof.createdAt, metadata: { runId: request.runId, result: proof.result.status } });
+  await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: "verification-proof", artifact: artifactReference(proofArtifact) });
   let baseline;
   try { baseline = await collectBaselineDiffEvidence({ preflight, artifactStore: store, now: context.now }); } catch { const result = publicState("FAILED", "baseline-evidence-failed"); await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings: {} }) }); return result; }
+  await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: "baseline-diff", artifact: artifactReference(baseline.artifact) });
   const automaticEvidenceBundle = await automaticVerifierBundle({ store, runId: request.runId, createdAt: proof.createdAt, proof: proofArtifact, baseline: baseline.artifact });
+  await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: "automatic-verifier-evidence-bundle", artifact: automaticEvidenceBundle });
   const ledger = new VerificationReportLedger(store);
   const bindings: Record<string, DigestArtifactReference> = {};
   for (const gate of request.plan.verificationGates ?? []) {
@@ -364,7 +412,8 @@ async function executeBound({ store, request, preflight, backend, context }: { s
     const evidenceBundle = automaticEvidenceBundle;
     bindings[gate.id] = evidenceBundle;
     const report: VerificationReport = { schemaVersion: SCHEMA_VERSION, id: `report.verifier.${sha256Json({ runId: request.runId, gateId: gate.id, proofDigest: proofArtifact.digest }).slice(0, 32)}`, createdAt: proof.createdAt, gateId: gate.id, verdict: verifierVerdict(proof.result.status), evidenceBundle };
-    await ledger.append(request.runId, report);
+    const persisted = await ledger.append(request.runId, report);
+    await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: `verification-report.${gate.id}`, artifact: persisted.artifact });
   }
   if (proof.result.status === "failed") {
     const result = publicState("FAILED", "automatic-verification-failed");
@@ -396,6 +445,36 @@ export async function harnessReports(artifactRoot: string, runId: string, gateId
   const history = await ledger.history(runId, gateId);
   const sanitize = (entry: (typeof history)[number]) => ({ id: entry.report.id, gateId: entry.report.gateId, verdict: entry.report.verdict, createdAt: entry.report.createdAt, ...(entry.report.evidenceBundle === undefined || entry.report.evidenceBundle.digest === undefined ? {} : { evidenceBundle: entry.report.evidenceBundle as DigestArtifactReference }) });
   return { history: history.map(sanitize), effective: history.length === 0 ? undefined : sanitize(history.at(-1)!) };
+}
+
+/** Lists only artifact references bound to immutable run/stage/role entries. */
+export async function harnessArtifactManifest(artifactRoot: string, runId: string): Promise<RunArtifactManifestEntry[]> {
+  const store = new FilesystemArtifactStore({ rootDirectory: resolve(artifactRoot) });
+  const records = await store.readImmutableRecords(ARTIFACT_MANIFEST_COLLECTION);
+  const entries: RunArtifactManifestEntry[] = [];
+  for (const record of records) {
+    try {
+      const text = record.content.toString("utf8");
+      const entry = JSON.parse(text) as RunArtifactManifestEntry;
+      if (
+        text !== canonicalizeJson(entry) ||
+        entry.schemaVersion !== SCHEMA_VERSION ||
+        entry.runId.length === 0 ||
+        (entry.stage !== "preflight" && entry.stage !== "execution" && entry.stage !== "verification") ||
+        entry.role.length === 0 ||
+        record.identity !== manifestIdentity(entry) ||
+        canonicalizeJson(entry.artifact) !== canonicalizeJson(reference(entry.artifact))
+      ) fail("Run artifact manifest integrity check failed.");
+      if (entry.runId === runId) {
+        await store.read(entry.artifact.digest);
+        entries.push(entry);
+      }
+    } catch (error) {
+      if (error instanceof HarnessError) throw error;
+      fail("Run artifact manifest integrity check failed.");
+    }
+  }
+  return entries.sort((left, right) => `${left.stage}:${left.role}`.localeCompare(`${right.stage}:${right.role}`));
 }
 
 export async function importHarnessEvidence({ artifactRoot, runId, gateId, file, capturedAt, mediaType, expectedDigest }: { artifactRoot: string; runId: string; gateId: string; file: string; capturedAt: string; mediaType?: string; expectedDigest?: string }): Promise<{ artifactId: string; digest: string; evidenceBundleId: string; evidenceBundleDigest: string }> {

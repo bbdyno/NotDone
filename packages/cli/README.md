@@ -70,3 +70,13 @@ notdone import-evidence --file ./capture.bin \
 and never create a PASS report. `VERIFIED` is emitted only after the required
 persisted reports are digest-bound to intact evidence bundles and the durable
 gate lock is sealed; a Codex completion message is never proof.
+
+## Harness self-test
+
+Run `pnpm test:harness` from the repository root (or `pnpm --filter notdone
+test:self`). This deterministic, network-free self-test creates a temporary
+Git repository and executable fake Codex process; it never calls a real Codex
+CLI or model. It exercises `run-next`, `status`, `show-report`, and
+`import-evidence` through the public CLI, verifying the
+`AWAITING_DEVICE_EVIDENCE` to `VERIFIED` transition and restart-safe durable
+artifacts before removing the fixture.

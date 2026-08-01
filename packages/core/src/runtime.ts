@@ -2,6 +2,7 @@ import {
   SCHEMA_VERSION,
   assertExecutionPlan,
   requiresExternalEvidence,
+  sha256Json,
   verificationGateSatisfied,
   type Artifact,
   type ArtifactReference,
@@ -15,6 +16,13 @@ import {
   type RunEvent,
   type VerificationReport,
 } from "@notdone/protocol";
+
+import {
+  GateLockCoordinator,
+  GateLockError,
+  type GateUnlockTransition,
+} from "./gate-lock-coordinator.js";
+import { VerificationReportLedger } from "./verification-report-ledger.js";
 
 export interface CapabilityManifest {
   backendId: string;
@@ -50,7 +58,9 @@ export type RuntimeFailureCode =
   | "cancelled"
   | "timeout"
   | "artifact-conflict"
-  | "required-gate-failed";
+  | "required-gate-failed"
+  | "report-persistence-failed"
+  | "gate-coordinator-failed";
 
 export interface RuntimeFailure {
   code: RuntimeFailureCode;
@@ -65,6 +75,7 @@ export interface RuntimeRunResult {
   verificationReports: VerificationReport[];
   /** Required external gates that have not yet produced a PASS report. */
   awaitingEvidenceGateIds?: string[];
+  gateUnlockTransition?: GateUnlockTransition;
   failure?: RuntimeFailure;
 }
 
@@ -77,6 +88,10 @@ export interface ExecutePlanOptions {
   requiredEvidenceBundle?: ArtifactReference;
   /** Expected evidence bundle for each required verification gate. */
   requiredEvidenceBundles?: Readonly<Record<string, DigestArtifactReference>>;
+  /** Optional durable history used for report persistence and effective selection. */
+  reportLedger?: VerificationReportLedger;
+  /** Optional immutable gate lock evaluated only after all required gates pass. */
+  gateCoordinator?: GateLockCoordinator;
 }
 
 class RuntimeCancellation implements CancellationHandle {
@@ -108,6 +123,26 @@ function event(
   };
 }
 
+function selectEffectiveReport(
+  reports: readonly VerificationReport[],
+  gateId: string,
+): VerificationReport | undefined {
+  const matching = reports.filter((report) => report.gateId === gateId);
+  for (const report of matching) {
+    if (Number.isNaN(Date.parse(report.createdAt))) {
+      throw new Error("Verification report timestamp is invalid.");
+    }
+  }
+  return matching.sort((left, right) => {
+    const time = Date.parse(left.createdAt) - Date.parse(right.createdAt);
+    if (time !== 0) return time;
+    if (left.id !== right.id) return left.id < right.id ? -1 : 1;
+    const leftDigest = sha256Json(left);
+    const rightDigest = sha256Json(right);
+    return leftDigest === rightDigest ? 0 : leftDigest < rightDigest ? -1 : 1;
+  }).at(-1);
+}
+
 export class ExecutionRuntime {
   readonly #backends: ExecutionBackend[];
 
@@ -124,6 +159,8 @@ export class ExecutionRuntime {
       cancellation = new RuntimeCancellation(),
       requiredEvidenceBundle,
       requiredEvidenceBundles,
+      reportLedger,
+      gateCoordinator,
     }: ExecutePlanOptions,
   ): Promise<RuntimeRunResult> {
     assertExecutionPlan(plan);
@@ -226,7 +263,21 @@ export class ExecutionRuntime {
         artifacts.set(artifact.id, artifact);
       }
       evidenceBundles.push(...(result.evidenceBundles ?? []));
-      verificationReports.push(...(result.verificationReports ?? []));
+      const reports = result.verificationReports ?? [];
+      if (reportLedger !== undefined) {
+        try {
+          for (const report of reports) {
+            await reportLedger.append(run.id, report);
+          }
+        } catch (error) {
+          return fail(
+            "report-persistence-failed",
+            "Verification report persistence failed.",
+            error,
+          );
+        }
+      }
+      verificationReports.push(...reports);
       run.events.push(
         event(run.id, run.events.length, "step.completed", now().toISOString(), step.id),
       );
@@ -237,7 +288,23 @@ export class ExecutionRuntime {
       if (!gate.required) {
         continue;
       }
-      const report = verificationReports.find((item) => item.gateId === gate.id);
+      let report: VerificationReport | undefined;
+      try {
+        report = selectEffectiveReport(verificationReports, gate.id);
+      } catch (error) {
+        return fail("required-gate-failed", "Verification report timestamp is invalid.", error);
+      }
+      if (reportLedger !== undefined) {
+        try {
+          report = (await reportLedger.effectiveReport(run.id, gate.id))?.report;
+        } catch (error) {
+          return fail(
+            "report-persistence-failed",
+            "Persisted verification report history failed validation.",
+            error,
+          );
+        }
+      }
       const expectedEvidenceBundle = requiredEvidenceBundles === undefined
         ? requiredEvidenceBundle
         : requiredEvidenceBundles[gate.id];
@@ -287,12 +354,49 @@ export class ExecutionRuntime {
         awaitingEvidenceGateIds,
       };
     }
+    let gateUnlockTransition: GateUnlockTransition | undefined;
+    if (gateCoordinator !== undefined) {
+      if (requiredEvidenceBundles === undefined) {
+        return fail("required-gate-failed", "Required evidence bindings are missing for gate unlock.");
+      }
+      try {
+        const lock = await gateCoordinator.unlock({
+          runId: run.id,
+          plan,
+          requiredEvidenceBundles,
+          now,
+        });
+        if (lock.state === "AWAITING_EVIDENCE") {
+          run.status = "AWAITING_EVIDENCE";
+          return {
+            run,
+            artifacts: [...artifacts.values()],
+            evidenceBundles,
+            verificationReports,
+            awaitingEvidenceGateIds: (plan.verificationGates ?? [])
+              .filter((gate) => gate.required && requiresExternalEvidence(gate))
+              .map((gate) => gate.id),
+          };
+        }
+        if (lock.state !== "UNLOCKED" || lock.transition === undefined) {
+          return fail("required-gate-failed", "Required verification gates remain locked.");
+        }
+        gateUnlockTransition = lock.transition;
+      } catch (error) {
+        return fail(
+          error instanceof GateLockError ? "gate-coordinator-failed" : "gate-coordinator-failed",
+          "Gate unlock coordination failed.",
+          error,
+        );
+      }
+    }
     run.status = "succeeded";
     return {
       run,
       artifacts: [...artifacts.values()],
       evidenceBundles,
       verificationReports,
+      ...(gateUnlockTransition === undefined ? {} : { gateUnlockTransition }),
     };
   }
 

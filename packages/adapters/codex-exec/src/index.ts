@@ -6,7 +6,7 @@ import type {
   ExecutionBackend,
   ExecutionContext,
 } from "@notdone/core";
-import { SCHEMA_VERSION, type Artifact } from "@notdone/protocol";
+import { SCHEMA_VERSION, type Artifact, type JsonValue } from "@notdone/protocol";
 
 export interface CodexProcess {
   writeStdin(value: string): void;
@@ -72,10 +72,40 @@ export interface CodexExecOptions {
   promptFor: (context: ExecutionContext) => string;
   redact?: (value: string) => string;
   environment?: Record<string, string | undefined>;
+  artifactStore?: CodexTerminalArtifactStore;
+}
+
+/** The narrow persistence surface required for durable Codex terminal evidence. */
+export interface CodexTerminalArtifactStore {
+  store(options: {
+    id: string;
+    mediaType: string;
+    content: string | Uint8Array;
+    metadata?: Record<string, JsonValue>;
+    createdAt?: string;
+  }): Promise<Artifact>;
+}
+
+export type CodexTerminalReason =
+  | "completed"
+  | "process-failed"
+  | "malformed-output"
+  | "timeout"
+  | "cancelled"
+  | "process-error";
+
+class TerminalPersistenceError extends Error {
+  constructor(readonly artifacts: Artifact[]) {
+    super("Codex terminal artifact persistence failed.");
+  }
 }
 
 export class CodexExecError extends Error {
-  constructor(readonly code: "missing-executable" | "policy-denied" | "timeout" | "cancelled" | "failed" | "malformed-output", message: string) {
+  constructor(
+    readonly code: "missing-executable" | "policy-denied" | "timeout" | "cancelled" | "failed" | "malformed-output" | "artifact-persistence-failed",
+    message: string,
+    readonly artifacts: Artifact[] = [],
+  ) {
     super(message);
     this.name = "CodexExecError";
   }
@@ -94,6 +124,10 @@ function allowedEnvironment(source: Record<string, string | undefined> | undefin
 
 function redaction(value: string): string {
   return value.replace(/(?:sk|api)[_-][A-Za-z0-9_-]{8,}/gu, "[redacted]");
+}
+
+function digest(value: string): string {
+  return createHash("sha256").update(value, "utf8").digest("hex");
 }
 
 function parseTranscript(stdout: string): { finalMessage?: string; changedFiles: string[] } {
@@ -129,25 +163,224 @@ export class CodexExecBackend implements ExecutionBackend {
     let stderr = "";
     return new Promise((resolveResult, rejectResult) => {
       let settled = false;
-      const finish = (callback: () => void) => { if (!settled) { settled = true; clearTimeout(timeout); clearInterval(cancellationPoll); callback(); } };
-      const timeout = setTimeout(() => finish(() => { process.terminate(); rejectResult(new CodexExecError("timeout", "Codex exec timed out.")); }), this.options.timeoutMs);
+      const redact = this.options.redact ?? redaction;
+      const settle = (
+        terminalReason: CodexTerminalReason,
+        exitCode: number | null,
+        processError?: Error,
+      ): void => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
+        clearInterval(cancellationPoll);
+        if (terminalReason === "timeout" || terminalReason === "cancelled") {
+          process.terminate();
+        }
+        const capturedStdout = stdout;
+        const capturedStderr = stderr;
+
+        void (async () => {
+          const durationMs = Date.now() - startedAt;
+          let transcript: { finalMessage?: string; changedFiles: string[] } | undefined;
+          let parseError: CodexExecError | undefined;
+          try {
+            transcript = parseTranscript(capturedStdout);
+          } catch (error) {
+            if (error instanceof CodexExecError && terminalReason === "completed") {
+              parseError = error;
+            } else if (!(error instanceof CodexExecError)) {
+              throw error;
+            }
+          }
+
+          const actualReason = parseError === undefined ? terminalReason : "malformed-output";
+          let terminalArtifacts: Artifact[] = [];
+          try {
+            terminalArtifacts = await this.persistTerminalArtifacts({
+              context,
+              stdout: capturedStdout,
+              stderr: capturedStderr,
+              finalMessage: transcript?.finalMessage,
+              terminalReason: actualReason,
+              exitCode,
+              durationMs,
+              redact,
+            });
+          } catch (error) {
+            rejectResult(new CodexExecError(
+              "artifact-persistence-failed",
+              "Failed to persist Codex terminal artifacts.",
+              error instanceof TerminalPersistenceError ? error.artifacts : terminalArtifacts,
+            ));
+            return;
+          }
+
+          if (parseError !== undefined) {
+            rejectResult(new CodexExecError(parseError.code, parseError.message, terminalArtifacts));
+            return;
+          }
+          if (actualReason === "process-failed") {
+            rejectResult(new CodexExecError(
+              "failed",
+              `Codex exec exited with code ${exitCode ?? -1}: ${redact(capturedStderr)}`,
+              terminalArtifacts,
+            ));
+            return;
+          }
+          if (actualReason === "timeout") {
+            rejectResult(new CodexExecError("timeout", "Codex exec timed out.", terminalArtifacts));
+            return;
+          }
+          if (actualReason === "cancelled") {
+            rejectResult(new CodexExecError("cancelled", "Codex exec was cancelled.", terminalArtifacts));
+            return;
+          }
+          if (actualReason === "process-error") {
+            rejectResult(new CodexExecError(
+              "missing-executable",
+              redact(processError?.message ?? "Codex exec executable failed."),
+              terminalArtifacts,
+            ));
+            return;
+          }
+
+          const successfulTranscript = transcript ?? { changedFiles: [] };
+          const metadata = {
+            exitStatus: exitCode,
+            durationMs,
+            changedFiles: successfulTranscript.changedFiles,
+            ...(successfulTranscript.finalMessage === undefined
+              ? {}
+              : { finalMessage: redact(successfulTranscript.finalMessage) }),
+            stderr: redact(capturedStderr),
+          };
+          const serializedMetadata = JSON.stringify(metadata);
+          resolveResult({
+            artifacts: [
+              {
+                schemaVersion: SCHEMA_VERSION,
+                id: `artifact.codex.${context.run.id}.${context.step.id}`,
+                createdAt: new Date().toISOString(),
+                mediaType: "application/vnd.notdone.codex-exec+json",
+                size: Buffer.byteLength(serializedMetadata),
+                digest: createHash("sha256").update(serializedMetadata).digest("hex"),
+                metadata,
+              },
+              ...terminalArtifacts,
+            ],
+          });
+        })().catch(() => {
+          rejectResult(new CodexExecError("failed", "Codex exec terminal handling failed."));
+        });
+      };
+      const timeout = setTimeout(() => settle("timeout", null), this.options.timeoutMs);
       const cancellationPoll = setInterval(() => {
-        if (context.cancellation.cancelled) finish(() => { process.terminate(); rejectResult(new CodexExecError("cancelled", "Codex exec was cancelled.")); });
+        if (context.cancellation.cancelled) settle("cancelled", null);
       }, 5);
       process.onStdout((chunk) => { stdout += chunk; });
       process.onStderr((chunk) => { stderr += chunk; });
-      process.onError((error) => finish(() => rejectResult(new CodexExecError("missing-executable", error.message))));
-      process.onClose((exitCode) => finish(() => {
-        if (exitCode !== 0) { rejectResult(new CodexExecError("failed", `Codex exec exited with code ${exitCode ?? -1}: ${redaction(stderr)}`)); return; }
-        try {
-          const transcript = parseTranscript(stdout);
-          const metadata = { exitStatus: exitCode, durationMs: Date.now() - startedAt, changedFiles: transcript.changedFiles, ...(transcript.finalMessage === undefined ? {} : { finalMessage: (this.options.redact ?? redaction)(transcript.finalMessage) }), stderr: (this.options.redact ?? redaction)(stderr) };
-          resolveResult({ artifacts: [{ schemaVersion: SCHEMA_VERSION, id: `artifact.codex.${context.run.id}.${context.step.id}`, createdAt: new Date().toISOString(), mediaType: "application/vnd.notdone.codex-exec+json", size: Buffer.byteLength(JSON.stringify(metadata)), digest: createHash("sha256").update(JSON.stringify(metadata)).digest("hex"), metadata }] });
-        } catch (error) { rejectResult(error); }
-      }));
+      process.onError((error) => settle("process-error", null, error));
+      process.onClose((exitCode) => settle(exitCode === 0 ? "completed" : "process-failed", exitCode));
       process.writeStdin(prompt);
       process.closeStdin();
     });
+  }
+
+  private async persistTerminalArtifacts({
+    context,
+    stdout,
+    stderr,
+    finalMessage,
+    terminalReason,
+    exitCode,
+    durationMs,
+    redact,
+  }: {
+    context: ExecutionContext;
+    stdout: string;
+    stderr: string;
+    finalMessage: string | undefined;
+    terminalReason: CodexTerminalReason;
+    exitCode: number | null;
+    durationMs: number;
+    redact: (value: string) => string;
+  }): Promise<Artifact[]> {
+    if (this.options.artifactStore === undefined) return [];
+
+    const capturedAt = new Date().toISOString();
+    const idPrefix = `artifact.codex.${context.run.id}.${context.step.id}.terminal`;
+    const metadata = (stream: string, raw: string): Record<string, JsonValue> => ({
+      runId: context.run.id,
+      stepId: context.step.id,
+      stream,
+      rawDigest: digest(raw),
+      redacted: true,
+      terminalReason,
+    });
+    const finalEnvelope = this.finalEnvelope(finalMessage, redact);
+    const exitRecord = {
+      runId: context.run.id,
+      stepId: context.step.id,
+      exitCode,
+      terminalReason,
+      durationMs,
+      capturedAt,
+    };
+    const serializedExitRecord = JSON.stringify(exitRecord);
+    const serializedFinalEnvelope = JSON.stringify(finalEnvelope);
+
+    const artifacts: Artifact[] = [];
+    const store = async (options: Parameters<CodexTerminalArtifactStore["store"]>[0]): Promise<void> => {
+      artifacts.push(await this.options.artifactStore!.store(options));
+    };
+    try {
+      await store({
+        id: `${idPrefix}.events`,
+        mediaType: "application/x-ndjson",
+        content: redact(stdout),
+        metadata: metadata("events", stdout),
+        createdAt: capturedAt,
+      });
+      await store({
+        id: `${idPrefix}.stderr`,
+        mediaType: "text/plain; charset=utf-8",
+        content: redact(stderr),
+        metadata: metadata("stderr", stderr),
+        createdAt: capturedAt,
+      });
+      await store({
+        id: `${idPrefix}.exit`,
+        mediaType: "application/json",
+        content: serializedExitRecord,
+        metadata: metadata("exit", serializedExitRecord),
+        createdAt: capturedAt,
+      });
+      await store({
+        id: `${idPrefix}.final`,
+        mediaType: "application/json",
+        content: serializedFinalEnvelope,
+        metadata: metadata("final", finalMessage ?? ""),
+        createdAt: capturedAt,
+      });
+    } catch {
+      throw new TerminalPersistenceError(artifacts);
+    }
+    return artifacts;
+  }
+
+  private finalEnvelope(
+    finalMessage: string | undefined,
+    redact: (value: string) => string,
+  ): { present: boolean; format: "text" | "json"; value: JsonValue } {
+    if (finalMessage === undefined) {
+      return { present: false, format: "text", value: null };
+    }
+    const value = redact(finalMessage);
+    try {
+      return { present: true, format: "json", value: JSON.parse(value) as JsonValue };
+    } catch {
+      return { present: true, format: "text", value };
+    }
   }
 
   private start(context: ExecutionContext): CodexProcess {

@@ -21,4 +21,17 @@ describe("verify-only", () => {
     const result = await new ExecutionRuntime([new VerifyOnlyBackend(verifier, [{ gateId: "gate.required", input: { type: "human" } }])]).execute(plan, { runId: "run.verify" });
     expect(result.failure?.code).toBe("required-gate-failed");
   });
+  it("attaches evidence bundles per verification input", async () => {
+    const root = await mkdtemp(join(tmpdir(), "notdone-verify-")); const verifier = new LocalVerifier(root);
+    const first = { schemaVersion: SCHEMA_VERSION, artifactId: "artifact.first", digest: "a".repeat(64) } as const;
+    const second = { schemaVersion: SCHEMA_VERSION, artifactId: "artifact.second", digest: "b".repeat(64) } as const;
+    const result = await new VerifyOnlyBackend(verifier, [
+      { gateId: "gate.first", input: { type: "regex", value: "yes", pattern: "yes" }, evidenceBundle: first },
+      { gateId: "gate.second", input: { type: "regex", value: "yes", pattern: "yes" }, evidenceBundle: second },
+    ]).execute({} as never);
+    expect(result.verificationReports).toMatchObject([
+      { gateId: "gate.first", evidenceBundle: first },
+      { gateId: "gate.second", evidenceBundle: second },
+    ]);
+  });
 });

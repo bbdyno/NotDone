@@ -3,7 +3,7 @@ import { access, readFile, realpath } from "node:fs/promises";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 import { spawn } from "node:child_process";
 
-import { SCHEMA_VERSION, type VerificationReport, type VerificationVerdict } from "@notdone/protocol";
+import { SCHEMA_VERSION, type ArtifactReference, type VerificationReport, type VerificationVerdict } from "@notdone/protocol";
 
 import type { ExecutionBackend } from "./runtime.js";
 
@@ -15,10 +15,22 @@ export type VerificationInput =
   | { type: "command"; argv: string[]; cwd?: string; timeoutMs?: number; expectExitCode: number }
   | { type: "human" };
 
+export interface VerifyOnlyInput {
+  gateId: string;
+  input: VerificationInput;
+  evidenceBundle?: ArtifactReference;
+}
+
+export interface VerifyOnlyBackendOptions {
+  evidenceBundlesByGate?: Readonly<Record<string, ArtifactReference>>;
+  /** @deprecated Prefer evidenceBundle on each input or evidenceBundlesByGate. */
+  evidenceBundle?: ArtifactReference;
+}
+
 export interface Verifier { id: string; verify(input: VerificationInput): Promise<{ verdict: VerificationVerdict; reason: string }>; }
 
-function report(gateId: string, verdict: VerificationVerdict, reason: string): VerificationReport {
-  return { schemaVersion: SCHEMA_VERSION, id: `report.${gateId}`, createdAt: new Date().toISOString(), gateId, verdict, reason };
+function report(gateId: string, verdict: VerificationVerdict, reason: string, evidenceBundle?: ArtifactReference): VerificationReport {
+  return { schemaVersion: SCHEMA_VERSION, id: `report.${gateId}`, createdAt: new Date().toISOString(), gateId, verdict, reason, ...(evidenceBundle === undefined ? {} : { evidenceBundle }) };
 }
 function inside(root: string, path: string): string {
   const candidate = isAbsolute(path) ? resolve(path) : resolve(root, path);
@@ -49,6 +61,6 @@ export class LocalVerifier implements Verifier {
 }
 export class VerifyOnlyBackend implements ExecutionBackend {
   readonly manifest: ExecutionBackend["manifest"] = { backendId: "verify-only", capabilities: ["verify"] };
-  constructor(private readonly verifier: Verifier, private readonly inputs: Array<{ gateId: string; input: VerificationInput }>) {}
-  async execute() { const verificationReports = await Promise.all(this.inputs.map(async ({ gateId, input }) => { const result = await this.verifier.verify(input); return report(gateId, result.verdict, result.reason); })); return { verificationReports }; }
+  constructor(private readonly verifier: Verifier, private readonly inputs: VerifyOnlyInput[], private readonly options: VerifyOnlyBackendOptions = {}) {}
+  async execute() { const verificationReports = await Promise.all(this.inputs.map(async ({ gateId, input, evidenceBundle }) => { const result = await this.verifier.verify(input); return report(gateId, result.verdict, result.reason, evidenceBundle ?? this.options.evidenceBundlesByGate?.[gateId] ?? this.options.evidenceBundle); })); return { verificationReports }; }
 }

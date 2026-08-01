@@ -1,5 +1,7 @@
 import type {
   ExecutionPlan,
+  ArtifactReference,
+  DigestArtifactReference,
   VerificationGate,
   VerificationReport,
 } from "./types.js";
@@ -16,6 +18,29 @@ export function requiredVerificationGates(
 export function verificationGateSatisfied(
   gate: VerificationGate,
   report: VerificationReport | undefined,
+  requiredEvidenceBundle?: ArtifactReference,
 ): boolean {
-  return !gate.required || report?.verdict === "PASS";
+  if (!gate.required) {
+    return true;
+  }
+  if (report?.verdict !== "PASS") {
+    return false;
+  }
+  if (requiredEvidenceBundle === undefined) {
+    return true;
+  }
+  const actual = report.evidenceBundle;
+  return (
+    hasDigest(requiredEvidenceBundle) &&
+    hasDigest(actual) &&
+    actual?.artifactId === requiredEvidenceBundle.artifactId &&
+    actual.digest === requiredEvidenceBundle.digest
+  );
+}
+
+/** Runtime guard for external input, even where a narrow type is available. */
+export function hasDigest(
+  reference: ArtifactReference | undefined,
+): reference is DigestArtifactReference {
+  return typeof reference?.digest === "string" && reference.digest.length > 0;
 }

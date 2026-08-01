@@ -3,6 +3,8 @@ import {
   assertExecutionPlan,
   verificationGateSatisfied,
   type Artifact,
+  type ArtifactReference,
+  type DigestArtifactReference,
   type CapabilityKind,
   type ExecutionPlan,
   type ExecutionPolicy,
@@ -68,6 +70,10 @@ export interface ExecutePlanOptions {
   now?: () => Date;
   stepTimeoutMs?: number;
   cancellation?: CancellationHandle;
+  /** @deprecated Use requiredEvidenceBundles for per-gate binding. */
+  requiredEvidenceBundle?: ArtifactReference;
+  /** Expected evidence bundle for each required verification gate. */
+  requiredEvidenceBundles?: Readonly<Record<string, DigestArtifactReference>>;
 }
 
 class RuntimeCancellation implements CancellationHandle {
@@ -113,6 +119,8 @@ export class ExecutionRuntime {
       now = () => new Date(),
       stepTimeoutMs,
       cancellation = new RuntimeCancellation(),
+      requiredEvidenceBundle,
+      requiredEvidenceBundles,
     }: ExecutePlanOptions,
   ): Promise<RuntimeRunResult> {
     assertExecutionPlan(plan);
@@ -223,7 +231,13 @@ export class ExecutionRuntime {
 
     for (const gate of plan.verificationGates ?? []) {
       const report = verificationReports.find((item) => item.gateId === gate.id);
-      if (!verificationGateSatisfied(gate, report)) {
+      const expectedEvidenceBundle = requiredEvidenceBundles === undefined
+        ? requiredEvidenceBundle
+        : requiredEvidenceBundles[gate.id];
+      if (
+        (gate.required && requiredEvidenceBundles !== undefined && expectedEvidenceBundle === undefined) ||
+        !verificationGateSatisfied(gate, report, expectedEvidenceBundle)
+      ) {
         return fail(
           "required-gate-failed",
           `Required verification gate did not pass: ${gate.id}.`,

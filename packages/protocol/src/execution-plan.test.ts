@@ -143,4 +143,39 @@ describe("provider-neutral execution plans", () => {
       ),
     ).toMatchObject({ valid: false });
   });
+
+  it("requires matching non-empty digests when evidence binding is requested", () => {
+    const gate: VerificationGate = {
+      schemaVersion: SCHEMA_VERSION,
+      id: "gate.required",
+      required: true,
+    };
+    const expected = {
+      schemaVersion: SCHEMA_VERSION,
+      artifactId: "artifact.evidence",
+      digest: "a".repeat(64),
+    };
+    const report = (evidenceBundle: VerificationReport["evidenceBundle"]): VerificationReport => ({
+      schemaVersion: SCHEMA_VERSION,
+      id: "report.required",
+      createdAt: timestamp,
+      gateId: gate.id,
+      verdict: "PASS",
+      evidenceBundle,
+    });
+
+    expect(verificationGateSatisfied(gate, report(expected), expected)).toBe(true);
+    expect(verificationGateSatisfied(gate, report(expected), {
+      schemaVersion: SCHEMA_VERSION,
+      artifactId: expected.artifactId,
+    })).toBe(false);
+    expect(verificationGateSatisfied(gate, report({
+      schemaVersion: SCHEMA_VERSION,
+      artifactId: expected.artifactId,
+    }), expected)).toBe(false);
+    expect(verificationGateSatisfied(gate, report({
+      ...expected,
+      digest: "b".repeat(64),
+    }), expected)).toBe(false);
+  });
 });

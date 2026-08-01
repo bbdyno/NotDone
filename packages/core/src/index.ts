@@ -1,5 +1,6 @@
 export * from "./collector.js";
 export * from "./artifact-store.js";
+export * from "./baseline-diff.js";
 export * from "./context-compiler.js";
 export * from "./evaluator.js";
 export * from "./legacy-adapter.js";

@@ -265,6 +265,11 @@ export interface ArtifactReference {
   digest?: string;
 }
 
+/** An artifact reference whose content digest is required for verification binding. */
+export interface DigestArtifactReference extends ArtifactReference {
+  digest: string;
+}
+
 export interface Artifact {
   schemaVersion: SchemaVersion;
   id: string;

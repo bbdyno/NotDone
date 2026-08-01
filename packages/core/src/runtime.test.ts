@@ -218,4 +218,27 @@ describe("ExecutionRuntime", () => {
     expect(result.run.status).toBe("failed");
     expect(result.failure?.code).toBe("required-gate-failed");
   });
+
+  it("binds each required gate to its own evidence bundle", async () => {
+    const first: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.first", required: true };
+    const second: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.second", required: true };
+    const firstBundle = { schemaVersion: SCHEMA_VERSION, artifactId: "artifact.first", digest: "a".repeat(64) } as const;
+    const secondBundle = { schemaVersion: SCHEMA_VERSION, artifactId: "artifact.second", digest: "b".repeat(64) } as const;
+    const reports = (firstEvidence = firstBundle, secondEvidence = secondBundle) => backend(["verify"], async () => ({
+      verificationReports: [
+        { schemaVersion: SCHEMA_VERSION, id: "report.first", createdAt: timestamp, gateId: first.id, verdict: "PASS", evidenceBundle: firstEvidence },
+        { schemaVersion: SCHEMA_VERSION, id: "report.second", createdAt: timestamp, gateId: second.id, verdict: "PASS", evidenceBundle: secondEvidence },
+      ],
+    }));
+    const bindings = { [first.id]: firstBundle, [second.id]: secondBundle };
+    const executionPlan = plan([{ schemaVersion: SCHEMA_VERSION, id: "step.verify", capability: "verify", verificationGateIds: [first.id, second.id] }], [first, second]);
+
+    const passed = await new ExecutionRuntime([reports()]).execute(executionPlan, { runId: "run.bound", requiredEvidenceBundles: bindings });
+    const missing = await new ExecutionRuntime([reports()]).execute(executionPlan, { runId: "run.missing", requiredEvidenceBundles: { [first.id]: firstBundle } });
+    const swapped = await new ExecutionRuntime([reports(secondBundle, firstBundle)]).execute(executionPlan, { runId: "run.swapped", requiredEvidenceBundles: bindings });
+
+    expect(passed.run.status).toBe("succeeded");
+    expect(missing.failure?.code).toBe("required-gate-failed");
+    expect(swapped.failure?.code).toBe("required-gate-failed");
+  });
 });

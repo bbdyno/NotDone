@@ -296,17 +296,26 @@ export class CodexExecBackend implements ExecutionBackend {
             stderr: redact(capturedStderr),
           };
           const serializedMetadata = JSON.stringify(metadata);
+          const summary = this.options.artifactStore === undefined
+            ? {
+              schemaVersion: SCHEMA_VERSION,
+              id: `artifact.codex.${context.run.id}.${context.step.id}`,
+              createdAt: new Date().toISOString(),
+              mediaType: "application/vnd.notdone.codex-exec+json",
+              size: Buffer.byteLength(serializedMetadata),
+              digest: createHash("sha256").update(serializedMetadata).digest("hex"),
+              metadata,
+            }
+            : await this.options.artifactStore.store({
+              id: `artifact.codex.${context.run.id}.${context.step.id}`,
+              mediaType: "application/vnd.notdone.codex-exec+json",
+              content: serializedMetadata,
+              metadata,
+              createdAt: new Date().toISOString(),
+            });
           resolveResult({
             artifacts: [
-              {
-                schemaVersion: SCHEMA_VERSION,
-                id: `artifact.codex.${context.run.id}.${context.step.id}`,
-                createdAt: new Date().toISOString(),
-                mediaType: "application/vnd.notdone.codex-exec+json",
-                size: Buffer.byteLength(serializedMetadata),
-                digest: createHash("sha256").update(serializedMetadata).digest("hex"),
-                metadata,
-              },
+              summary,
               ...terminalArtifacts,
             ],
           });

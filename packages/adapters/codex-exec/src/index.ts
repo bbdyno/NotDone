@@ -1,4 +1,4 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createHash } from "node:crypto";
 
 import type {
@@ -27,6 +27,23 @@ export interface CodexProcessSpec {
 
 export interface CodexProcessSpawner {
   spawn(spec: CodexProcessSpec): CodexProcess;
+}
+
+/** Reads the immutable commit currently selected by HEAD without invoking a shell. */
+export interface CodexHeadReader {
+  read(workspaceRoot: string): string;
+}
+
+class NodeCodexHeadReader implements CodexHeadReader {
+  read(workspaceRoot: string): string {
+    const head = execFileSync("git", ["rev-parse", "--verify", "HEAD^{commit}"], {
+      cwd: workspaceRoot,
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+    }).trim();
+    if (head.length === 0) throw new Error("Git returned an empty HEAD.");
+    return head;
+  }
 }
 
 class NodeCodexProcess implements CodexProcess {
@@ -73,6 +90,7 @@ export interface CodexExecOptions {
   redact?: (value: string) => string;
   environment?: Record<string, string | undefined>;
   artifactStore?: CodexTerminalArtifactStore;
+  headReader?: CodexHeadReader;
 }
 
 /** The narrow persistence surface required for durable Codex terminal evidence. */
@@ -102,7 +120,7 @@ class TerminalPersistenceError extends Error {
 
 export class CodexExecError extends Error {
   constructor(
-    readonly code: "missing-executable" | "policy-denied" | "timeout" | "cancelled" | "failed" | "malformed-output" | "artifact-persistence-failed",
+    readonly code: "missing-executable" | "policy-denied" | "timeout" | "cancelled" | "failed" | "malformed-output" | "artifact-persistence-failed" | "head-check-failed" | "head-changed",
     message: string,
     readonly artifacts: Artifact[] = [],
   ) {
@@ -150,14 +168,19 @@ function parseTranscript(stdout: string): { finalMessage?: string; changedFiles:
 
 export class CodexExecBackend implements ExecutionBackend {
   readonly manifest: ExecutionBackend["manifest"] = { backendId: "codex-exec", capabilities: ["run"] };
-  constructor(private readonly spawner: CodexProcessSpawner, private readonly options: CodexExecOptions) {}
+  private readonly headReader: CodexHeadReader;
+
+  constructor(private readonly spawner: CodexProcessSpawner, private readonly options: CodexExecOptions) {
+    this.headReader = options.headReader ?? new NodeCodexHeadReader();
+  }
 
   async execute(context: ExecutionContext): Promise<{ artifacts: Artifact[] }> {
     if (context.policy.externalNetwork !== "allow" || !this.options.approved || !context.policy.allowedTools.includes("codex-exec")) {
       throw new CodexExecError("policy-denied", "Codex exec is not policy-approved.");
     }
     const startedAt = Date.now();
-    const prompt = `${this.options.promptFor(context)}\n\nSafety constraints: do not run git push, create releases, or publish packages. Work only inside the requested workspace.`;
+    const startingHead = this.readHead("before starting Codex");
+    const prompt = `${this.options.promptFor(context)}\n\nSafety constraints: do not create commits or move Git HEAD. Do not run git commit (including git commit --amend), git merge, git rebase, git reset, git switch, git checkout, git branch, git tag, or git push. Worktree file edits that do not move HEAD are allowed. Do not create releases or publish packages. Work only inside the requested workspace.`;
     const process = this.start(context);
     let stdout = "";
     let stderr = "";
@@ -244,6 +267,24 @@ export class CodexExecBackend implements ExecutionBackend {
             return;
           }
 
+          let endingHead: string;
+          try {
+            endingHead = this.readHead("after Codex completed");
+          } catch (error) {
+            rejectResult(error instanceof CodexExecError
+              ? new CodexExecError(error.code, error.message, terminalArtifacts)
+              : error);
+            return;
+          }
+          if (endingHead !== startingHead) {
+            rejectResult(new CodexExecError(
+              "head-changed",
+              `Codex exec changed repository HEAD from ${startingHead} to ${endingHead}.`,
+              terminalArtifacts,
+            ));
+            return;
+          }
+
           const successfulTranscript = transcript ?? { changedFiles: [] };
           const metadata = {
             exitStatus: exitCode,
@@ -284,6 +325,17 @@ export class CodexExecBackend implements ExecutionBackend {
       process.writeStdin(prompt);
       process.closeStdin();
     });
+  }
+
+  private readHead(action: string): string {
+    try {
+      return this.headReader.read(this.options.workspaceRoot);
+    } catch {
+      throw new CodexExecError(
+        "head-check-failed",
+        `Git failed while resolving repository HEAD ${action}.`,
+      );
+    }
   }
 
   private async persistTerminalArtifacts({

@@ -86,7 +86,64 @@ describe("Codex exec adapter", () => {
     expect(completed.artifacts).toHaveLength(1);
     expect(spawner.calls[0]?.[0]?.args).toEqual(["--ask-for-approval", "never", "exec", "--ephemeral", "--json", "--sandbox", "workspace-write", "--cd", workspaceRoot, "-"]);
     expect(spawner.calls[0]?.[0]?.env).toMatchObject({ PATH: "/bin", GIT_TERMINAL_PROMPT: "0" });
-    expect(process.stdin).toContain("do not run git push"); expect(process.stdin).not.toContain("SECRET");
+    expect(process.stdin).toContain("git commit (including git commit --amend)");
+    expect(process.stdin).toContain("git merge, git rebase, git reset, git switch, git checkout, git branch, git tag, or git push");
+    expect(process.stdin).not.toContain("SECRET");
+  });
+  it("allows worktree edits when HEAD remains invariant", async () => {
+    const process = new FakeProcess();
+    let reads = 0;
+    const pending = backend(new FakeSpawner(process), {
+      headReader: { read: () => { reads += 1; return "a".repeat(40); } },
+    }).execute(context());
+    process.emitStdout('{"item":{"type":"agent_message","text":"edited worktree only"},"changed_files":["src/worktree-only.ts"]}\n');
+    process.close(0);
+    await expect(pending).resolves.toMatchObject({
+      artifacts: [{ metadata: { changedFiles: ["src/worktree-only.ts"] } }],
+    });
+    expect(reads).toBe(2);
+  });
+  it("fails closed before spawning when the initial HEAD lookup fails", async () => {
+    const spawner = new FakeSpawner(new FakeProcess());
+    await expect(backend(spawner, {
+      headReader: { read: () => { throw new Error("git unavailable"); } },
+    }).execute(context())).rejects.toMatchObject({ code: "head-check-failed" });
+    expect(spawner.calls).toHaveLength(0);
+  });
+  it("fails with preserved terminal artifacts when Codex changes HEAD", async () => {
+    await withStore(async (store) => {
+      const process = new FakeProcess();
+      const heads = ["a".repeat(40), "b".repeat(40)];
+      const pending = backend(new FakeSpawner(process), {
+        artifactStore: store,
+        headReader: { read: () => heads.shift() ?? "b".repeat(40) },
+      }).execute(context());
+      process.emitStdout('{"item":{"type":"agent_message","text":"claimed success"}}\n');
+      process.close(0);
+      const error = await pending.then(
+        () => { throw new Error("Expected Codex execution to fail."); },
+        (reason: unknown) => reason,
+      ) as CodexExecError;
+      expect(error).toMatchObject({
+        code: "head-changed",
+        message: expect.stringContaining(`${"a".repeat(40)} to ${"b".repeat(40)}`),
+      });
+      expect(error.artifacts).toHaveLength(4);
+      expect((await store.read(artifactBySuffix(error.artifacts, ".terminal.events").digest)).toString("utf8")).toContain("claimed success");
+    });
+  });
+  it("fails closed after completion when the final HEAD lookup fails", async () => {
+    const process = new FakeProcess();
+    let reads = 0;
+    const pending = backend(new FakeSpawner(process), {
+      headReader: { read: () => {
+        reads += 1;
+        if (reads === 1) return "a".repeat(40);
+        throw new Error("git unavailable");
+      } },
+    }).execute(context());
+    process.close(0);
+    await expect(pending).rejects.toMatchObject({ code: "head-check-failed" });
   });
   it("preserves a redacted, digest-addressed terminal artifact set when a store is supplied", async () => {
     await withStore(async (store) => {

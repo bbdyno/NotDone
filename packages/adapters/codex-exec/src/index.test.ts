@@ -4,6 +4,8 @@ import { ExecutionRuntime, type CancellationHandle } from "@notdone/core";
 
 import { CodexExecBackend, CodexExecError, type CodexProcess, type CodexProcessSpawner, probeCodexExec } from "./index.js";
 
+const workspaceRoot = process.cwd();
+
 class FakeProcess implements CodexProcess {
   stdoutListener: ((value: string) => void) | undefined;
   stderrListener: ((value: string) => void) | undefined;
@@ -30,14 +32,14 @@ class FakeSpawner implements CodexProcessSpawner {
 }
 const policy = { schemaVersion: "1.0" as const, externalNetwork: "allow" as const, loopback: "deny" as const, allowedTools: ["codex-exec"], approvalRequirement: "required" as const };
 const context = (cancellation: CancellationHandle = { cancelled: false, cancel() {} }) => ({ run: { schemaVersion: "1.0" as const, id: "run-1", planId: "plan", createdAt: new Date().toISOString(), status: "running" as const, events: [] }, step: { schemaVersion: "1.0" as const, id: "run", capability: "run" as const }, policy, cancellation });
-const backend = (spawner: FakeSpawner, overrides: Partial<ConstructorParameters<typeof CodexExecBackend>[1]> = {}) => new CodexExecBackend(spawner, { workspaceRoot: process.cwd(), executable: "/fake/codex", timeoutMs: 100, approved: true, promptFor: () => "use token sk_secretvalue", environment: { PATH: "/bin", SECRET: "not-forwarded" }, ...overrides });
+const backend = (spawner: FakeSpawner, overrides: Partial<ConstructorParameters<typeof CodexExecBackend>[1]> = {}) => new CodexExecBackend(spawner, { workspaceRoot, executable: "/fake/codex", timeoutMs: 100, approved: true, promptFor: () => "use token sk_secretvalue", environment: { PATH: "/bin", SECRET: "not-forwarded" }, ...overrides });
 
 describe("Codex exec adapter", () => {
   it("starts with argv/stdin, streams JSON, redacts transcripts, and records changed files", async () => {
     const process = new FakeProcess(); const spawner = new FakeSpawner(process); const result = backend(spawner).execute(context());
     process.emitStdout('{"type":"item.completed","item":{"type":"agent_message","text":"done sk_secretvalue"},"changed_files":["src/a.ts"]}\n'); process.close(0);
     await expect(result).resolves.toMatchObject({ artifacts: [{ digest: expect.stringMatching(/^(?!0{64}$)[a-f0-9]{64}$/u), metadata: { changedFiles: ["src/a.ts"], finalMessage: "done [redacted]", exitStatus: 0 } }] });
-    expect(spawner.calls[0]?.[0]?.args.slice(0, 5)).toEqual(["exec", "--ephemeral", "--json", "--sandbox", "workspace-write"]);
+    expect(spawner.calls[0]?.[0]?.args).toEqual(["--ask-for-approval", "never", "exec", "--ephemeral", "--json", "--sandbox", "workspace-write", "--cd", workspaceRoot, "-"]);
     expect(spawner.calls[0]?.[0]?.env).toMatchObject({ PATH: "/bin", GIT_TERMINAL_PROMPT: "0" });
     expect(process.stdin).toContain("do not run git push"); expect(process.stdin).not.toContain("SECRET");
   });

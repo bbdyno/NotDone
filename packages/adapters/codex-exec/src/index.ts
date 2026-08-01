@@ -152,7 +152,7 @@ export class CodexExecBackend implements ExecutionBackend {
 
   private start(context: ExecutionContext): CodexProcess {
     try {
-      return this.spawner.spawn({ executable: this.options.executable, args: ["exec", "--ephemeral", "--json", "--sandbox", "workspace-write", "--ask-for-approval", "never", "--cd", this.options.workspaceRoot, "-"], cwd: this.options.workspaceRoot, env: allowedEnvironment(this.options.environment) });
+      return this.spawner.spawn({ executable: this.options.executable, args: ["--ask-for-approval", "never", "exec", "--ephemeral", "--json", "--sandbox", "workspace-write", "--cd", this.options.workspaceRoot, "-"], cwd: this.options.workspaceRoot, env: allowedEnvironment(this.options.environment) });
     } catch (error) {
       throw new CodexExecError("missing-executable", error instanceof Error ? error.message : String(error));
     }

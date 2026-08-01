@@ -168,4 +168,14 @@ describe("notdone CLI", () => {
     stdout = []; context.stdout = (line) => stdout.push(line);
     await runCli(["--help"], context); expect(stdout.join("\n")).toContain("notdone retrieve");
   });
+
+  it("documents public harness commands and rejects incomplete arguments", async () => {
+    for (const command of ["status", "run-next", "show-report", "import-evidence"]) {
+      stdout = []; context.stdout = (line) => stdout.push(line);
+      expect(await runCli([command, "--help"], context)).toBe(exitCodes.success);
+      expect(stdout.join("\n")).toContain(`notdone ${command}`);
+    }
+    expect(await runCli(["status", "--artifact-root", "artifacts"], context)).toBe(exitCodes.error);
+    expect(stderr.at(-1)).toContain("Run 'notdone --help'");
+  });
 });

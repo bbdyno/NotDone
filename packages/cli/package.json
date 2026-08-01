@@ -38,7 +38,8 @@
     "test": "vitest run src",
     "typecheck": "tsc -b --pretty false"
   },
-  "devDependencies": {
+  "dependencies": {
+    "@notdone/codex-exec-adapter": "workspace:*",
     "@notdone/core": "workspace:*",
     "@notdone/protocol": "workspace:*"
   }

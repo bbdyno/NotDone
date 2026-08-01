@@ -188,4 +188,22 @@ export class VerificationReportLedger {
     const history = await this.history(runId, gateId);
     return history.at(-1);
   }
+
+  /**
+   * Resolves one historically referenced report by its immutable artifact
+   * reference. This never selects a newer effective report.
+   */
+  async reportForArtifact(
+    runId: string,
+    artifact: ArtifactReference & { digest: string },
+  ): Promise<PersistedVerificationReport | undefined> {
+    if (artifact.artifactId.length === 0 || !DIGEST_PATTERN.test(artifact.digest)) {
+      fail("invalid-report", "Verification report artifact reference is invalid.");
+    }
+    const history = await this.history(runId);
+    return history.find((entry) =>
+      entry.artifact.artifactId === artifact.artifactId &&
+      entry.artifact.digest === artifact.digest,
+    );
+  }
 }

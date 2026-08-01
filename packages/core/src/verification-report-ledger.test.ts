@@ -290,6 +290,19 @@ describe("GateLockCoordinator", () => {
     } finally { await rm(root, { recursive: true, force: true }); }
   });
 
+  it("inspects gate state without sealing an unlock transition", async () => {
+    const { root, ledger, store } = await fixture();
+    try {
+      const gate = { schemaVersion: SCHEMA_VERSION, id: "gate.required", required: true } as const;
+      const executionPlan = plan([gate]);
+      const evidence = await admittedBundle(store, "bundle.inspect");
+      await ledger.append("run.inspect", report("report.inspect", gate.id, "PASS", timestamp, evidence));
+      const coordinator = new GateLockCoordinator({ artifactStore: store, reportLedger: ledger });
+      expect(await coordinator.inspect({ runId: "run.inspect", plan: executionPlan, requiredEvidenceBundles: { [gate.id]: evidence } })).toMatchObject({ state: "UNLOCKED", sealed: false });
+      expect(await store.readImmutableRecords("notdone.gate-unlock-ledger.v1")).toEqual([]);
+    } finally { await rm(root, { recursive: true, force: true }); }
+  });
+
   it("requires importer provenance for external evidence and binds it to the current run and gate", async () => {
     const { root, ledger, store } = await fixture();
     try {

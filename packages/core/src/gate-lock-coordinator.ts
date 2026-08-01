@@ -52,6 +52,8 @@ export interface GateUnlockTransition {
 
 export interface GateLockResult {
   state: GateLockState;
+  /** True only when an immutable unlock transition was already persisted. */
+  sealed: boolean;
   reason?: "missing-report" | "report-not-pass" | "missing-evidence-binding" | "evidence-integrity-failed" | "awaiting-external-evidence";
   transition?: GateUnlockTransition;
 }
@@ -113,41 +115,16 @@ export class GateLockCoordinator {
       if (existing.planDigest !== planDigest) {
         fail("sealed-decision-conflict", "A different plan is already sealed for this run.");
       }
-      return { state: "UNLOCKED", transition: existing };
+      await this.#validateSealedTransition(existing, input.plan);
+      return { state: "UNLOCKED", sealed: true, transition: existing };
     }
 
-    const required = (input.plan.verificationGates ?? []).filter((gate) => gate.required);
-    const effectiveReports: Array<{ gateId: string; artifactId: string; digest: string }> = [];
-    const bindings: Array<{ gateId: string; artifactId: string; digest: string }> = [];
-    for (const gate of required) {
-      let report: PersistedVerificationReport | undefined;
-      try {
-        report = await this.#reportLedger.effectiveReport(input.runId, gate.id);
-      } catch (error) {
-        if (error instanceof VerificationReportLedgerError) {
-          fail("integrity-failed", "Persisted verification history failed validation.");
-        }
-        throw error;
-      }
-      if (report === undefined) {
-        return { state: requiresExternalEvidence(gate) ? "AWAITING_EVIDENCE" : "LOCKED", reason: requiresExternalEvidence(gate) ? "awaiting-external-evidence" : "missing-report" };
-      }
-      if (requiresExternalEvidence(gate) && report.report.verdict === "ABSTAIN") {
-        return { state: "AWAITING_EVIDENCE", reason: "awaiting-external-evidence" };
-      }
-      const expected = input.requiredEvidenceBundles[gate.id];
-      if (expected === undefined || !hasDigest(expected) || expected.artifactId.length === 0 || !DIGEST_PATTERN.test(expected.digest)) {
-        return { state: "LOCKED", reason: "missing-evidence-binding" };
-      }
-      if (!(await this.#verifyEvidenceBundle(expected, input.runId, gate.id, requiresExternalEvidence(gate)))) {
-        return { state: "LOCKED", reason: "evidence-integrity-failed" };
-      }
-      if (!verificationGateSatisfied(gate, report.report, expected)) {
-        return { state: "LOCKED", reason: "report-not-pass" };
-      }
-      effectiveReports.push({ gateId: gate.id, artifactId: report.artifact.artifactId, digest: report.artifact.digest });
-      bindings.push({ gateId: gate.id, artifactId: expected.artifactId, digest: expected.digest });
+    const evaluation = await this.#evaluate(input);
+    if (evaluation.result.state !== "UNLOCKED") {
+      return evaluation.result;
     }
+    const { effectiveReports, bindings } = evaluation;
+
     const unlockedAt = (input.now ?? (() => new Date()))().toISOString();
     if (!validTimestamp(unlockedAt)) fail("invalid-input", "Gate unlock timestamp is invalid.");
     const base = {
@@ -170,11 +147,71 @@ export class GateLockCoordinator {
     } catch (error) {
       if (error instanceof ArtifactStoreError && error.code === "immutable-record-conflict") {
         const sealed = await this.#existing(input.runId, input.plan.id);
-        if (sealed !== undefined) return { state: "UNLOCKED", transition: sealed };
+        if (sealed !== undefined) {
+          await this.#validateSealedTransition(sealed, input.plan);
+          return { state: "UNLOCKED", sealed: true, transition: sealed };
+        }
       }
       fail("persistence-failed", "Gate unlock transition could not be persisted.");
     }
-    return { state: "UNLOCKED", transition };
+    return { state: "UNLOCKED", sealed: true, transition };
+  }
+
+  /**
+   * Reads persisted reports and artifacts without creating an unlock transition.
+   * Callers that only display state must use this rather than {@link unlock}.
+   */
+  async inspect(input: UnlockGatesInput): Promise<GateLockResult> {
+    if (input.runId.length === 0) fail("invalid-input", "Gate lock run and plan identity are required.");
+    try { assertExecutionPlan(input.plan); } catch { fail("invalid-input", "Gate lock execution plan is invalid."); }
+    const existing = await this.#existing(input.runId, input.plan.id);
+    if (existing !== undefined) {
+      if (existing.planDigest !== sha256Json(input.plan)) fail("sealed-decision-conflict", "A different plan is already sealed for this run.");
+      await this.#validateSealedTransition(existing, input.plan);
+      return { state: "UNLOCKED", sealed: true, transition: existing };
+    }
+    return (await this.#evaluate(input)).result;
+  }
+
+  async #evaluate(input: UnlockGatesInput): Promise<{
+    result: GateLockResult;
+    effectiveReports: Array<{ gateId: string; artifactId: string; digest: string }>;
+    bindings: Array<{ gateId: string; artifactId: string; digest: string }>;
+  }> {
+
+    const required = (input.plan.verificationGates ?? []).filter((gate) => gate.required);
+    const effectiveReports: Array<{ gateId: string; artifactId: string; digest: string }> = [];
+    const bindings: Array<{ gateId: string; artifactId: string; digest: string }> = [];
+    for (const gate of required) {
+      let report: PersistedVerificationReport | undefined;
+      try {
+        report = await this.#reportLedger.effectiveReport(input.runId, gate.id);
+      } catch (error) {
+        if (error instanceof VerificationReportLedgerError) {
+          fail("integrity-failed", "Persisted verification history failed validation.");
+        }
+        throw error;
+      }
+      if (report === undefined) {
+        return { result: { state: requiresExternalEvidence(gate) ? "AWAITING_EVIDENCE" : "LOCKED", sealed: false, reason: requiresExternalEvidence(gate) ? "awaiting-external-evidence" : "missing-report" }, effectiveReports, bindings };
+      }
+      if (requiresExternalEvidence(gate) && report.report.verdict === "ABSTAIN") {
+        return { result: { state: "AWAITING_EVIDENCE", sealed: false, reason: "awaiting-external-evidence" }, effectiveReports, bindings };
+      }
+      const expected = input.requiredEvidenceBundles[gate.id];
+      if (expected === undefined || !hasDigest(expected) || expected.artifactId.length === 0 || !DIGEST_PATTERN.test(expected.digest)) {
+        return { result: { state: "LOCKED", sealed: false, reason: "missing-evidence-binding" }, effectiveReports, bindings };
+      }
+      if (!(await this.#verifyEvidenceBundle(expected, input.runId, gate.id, requiresExternalEvidence(gate)))) {
+        return { result: { state: "LOCKED", sealed: false, reason: "evidence-integrity-failed" }, effectiveReports, bindings };
+      }
+      if (!verificationGateSatisfied(gate, report.report, expected)) {
+        return { result: { state: "LOCKED", sealed: false, reason: "report-not-pass" }, effectiveReports, bindings };
+      }
+      effectiveReports.push({ gateId: gate.id, artifactId: report.artifact.artifactId, digest: report.artifact.digest });
+      bindings.push({ gateId: gate.id, artifactId: expected.artifactId, digest: expected.digest });
+    }
+    return { result: { state: "UNLOCKED", sealed: false }, effectiveReports, bindings };
   }
 
   async #existing(runId: string, planId: string): Promise<GateUnlockTransition | undefined> {
@@ -198,6 +235,62 @@ export class GateLockCoordinator {
       }
     }
     return undefined;
+  }
+
+  /** Revalidates the exact historical PASS reports and bundles sealed by a transition. */
+  async #validateSealedTransition(transition: GateUnlockTransition, plan: ExecutionPlan): Promise<void> {
+    const required = (plan.verificationGates ?? []).filter((gate) => gate.required);
+    const requiredIds = new Set(required.map((gate) => gate.id));
+    const reports = new Map<string, { artifactId: string; digest: string }>();
+    const bindings = new Map<string, { artifactId: string; digest: string }>();
+    for (const item of transition.effectiveReports) {
+      if (typeof item.gateId !== "string" || item.gateId.length === 0 || typeof item.artifactId !== "string" || item.artifactId.length === 0 || !DIGEST_PATTERN.test(item.digest) || reports.has(item.gateId)) {
+        fail("integrity-failed", "Sealed gate transition is invalid.");
+      }
+      reports.set(item.gateId, item);
+    }
+    for (const item of transition.requiredEvidenceBindings) {
+      if (typeof item.gateId !== "string" || item.gateId.length === 0 || typeof item.artifactId !== "string" || item.artifactId.length === 0 || !DIGEST_PATTERN.test(item.digest) || bindings.has(item.gateId)) {
+        fail("integrity-failed", "Sealed gate transition is invalid.");
+      }
+      bindings.set(item.gateId, item);
+    }
+    if (reports.size !== requiredIds.size || bindings.size !== requiredIds.size || [...requiredIds].some((id) => !reports.has(id) || !bindings.has(id))) {
+      fail("integrity-failed", "Sealed gate transition does not match required gates.");
+    }
+    for (const gate of required) {
+      const reportReference = reports.get(gate.id)!;
+      const binding = bindings.get(gate.id)!;
+      let report: PersistedVerificationReport | undefined;
+      try {
+        report = await this.#reportLedger.reportForArtifact(transition.runId, {
+          schemaVersion: SCHEMA_VERSION,
+          artifactId: reportReference.artifactId,
+          digest: reportReference.digest,
+        });
+      } catch {
+        fail("integrity-failed", "Sealed verification report failed integrity validation.");
+      }
+      if (
+        report === undefined ||
+        report.report.gateId !== gate.id ||
+        report.report.verdict !== "PASS" ||
+        report.artifact.artifactId !== reportReference.artifactId ||
+        report.artifact.digest !== reportReference.digest ||
+        report.report.evidenceBundle?.artifactId !== binding.artifactId ||
+        report.report.evidenceBundle.digest !== binding.digest
+      ) {
+        fail("integrity-failed", "Sealed verification report does not match its transition.");
+      }
+      const expected: DigestArtifactReference = {
+        schemaVersion: SCHEMA_VERSION,
+        artifactId: binding.artifactId,
+        digest: binding.digest,
+      };
+      if (!(await this.#verifyEvidenceBundle(expected, transition.runId, gate.id, requiresExternalEvidence(gate)))) {
+        fail("integrity-failed", "Sealed evidence bundle failed integrity validation.");
+      }
+    }
   }
 
   /** Validates the admitted bundle and every referenced artifact without exposing evidence bytes. */

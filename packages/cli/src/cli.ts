@@ -26,6 +26,14 @@ import {
   readJsonFile,
   writeJsonFile,
 } from "./files.js";
+import {
+  harnessReports,
+  harnessStatus,
+  importHarnessEvidence,
+  parseHarnessRequest,
+  runNextHarness,
+  type HarnessContext,
+} from "./harness.js";
 import { createContractTemplate } from "./template.js";
 
 export const CLI_VERSION = "0.1.1";
@@ -44,6 +52,7 @@ export interface CliContext {
   now: () => Date;
   stdout: (line: string) => void;
   stderr: (line: string) => void;
+  harnessContext?: HarnessContext;
 }
 
 interface ParsedArguments {
@@ -74,6 +83,10 @@ Usage:
   notdone run <retrieve|verify|model|retrieve-model|model-verify|retrieve-model-verify> [query] [--profile Private|Saver|Quality] [--json]
   notdone backends [--json]
   notdone packs [--json]
+  notdone status --artifact-root PATH --run-id ID [--json]
+  notdone run-next --request PATH --artifact-root PATH --target-workspace PATH [--json]
+  notdone show-report --artifact-root PATH --run-id ID [--gate-id ID] [--json]
+  notdone import-evidence --file PATH --artifact-root PATH --run-id ID --gate-id ID --captured-at ISO-8601 [--media-type TYPE] [--sha256 DIGEST] [--json]
   notdone --version
 
 Exit codes:
@@ -186,6 +199,84 @@ async function loadContract(
 
 function printJson(context: CliContext, value: unknown): void {
   context.stdout(JSON.stringify(value, null, 2));
+}
+
+interface HarnessArguments { json: boolean; values: Record<string, string>; }
+
+function parseHarnessArguments(args: string[], allowed: readonly string[]): HarnessArguments {
+  const values: Record<string, string> = {};
+  let json = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--json") { json = true; continue; }
+    if (argument === undefined || !allowed.includes(argument)) throw new CliUsageError(`Unknown option: ${argument ?? ""}`);
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) throw new CliUsageError(`${argument} requires a value.`);
+    if (values[argument] !== undefined) throw new CliUsageError(`${argument} may only be provided once.`);
+    values[argument] = value;
+    index += 1;
+  }
+  return { json, values };
+}
+
+function requiredHarnessArgument(values: Record<string, string>, option: string): string {
+  const value = values[option];
+  if (value === undefined) throw new CliUsageError(`${option} is required.`);
+  return value;
+}
+
+function harnessOutput(context: CliContext, json: boolean, output: { status: string; reason?: string }): void {
+  if (json) printJson(context, output);
+  else context.stdout(output.reason === undefined ? output.status : `${output.status}: ${output.reason}`);
+}
+
+async function statusCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseHarnessArguments(args, ["--artifact-root", "--run-id"]);
+  const output = await harnessStatus(absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--artifact-root")), requiredHarnessArgument(parsed.values, "--run-id"));
+  harnessOutput(context, parsed.json, output);
+  return output.status === "VERIFIED" ? exitCodes.success : output.status === "FAILED" ? exitCodes.failed : exitCodes.blocked;
+}
+
+async function showReportCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseHarnessArguments(args, ["--artifact-root", "--run-id", "--gate-id"]);
+  const output = await harnessReports(absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--artifact-root")), requiredHarnessArgument(parsed.values, "--run-id"), parsed.values["--gate-id"]);
+  if (parsed.json) printJson(context, output);
+  else {
+    context.stdout(`Reports: ${output.history.length}`);
+    for (const report of output.history) context.stdout(`${report.createdAt} ${report.gateId} ${report.verdict}`);
+    if (output.effective !== undefined) context.stdout(`Effective: ${output.effective.gateId} ${output.effective.verdict}`);
+  }
+  return exitCodes.success;
+}
+
+async function importEvidenceCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseHarnessArguments(args, ["--file", "--artifact-root", "--run-id", "--gate-id", "--captured-at", "--media-type", "--sha256"]);
+  const output = await importHarnessEvidence({
+    file: absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--file")),
+    artifactRoot: absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--artifact-root")),
+    runId: requiredHarnessArgument(parsed.values, "--run-id"),
+    gateId: requiredHarnessArgument(parsed.values, "--gate-id"),
+    capturedAt: requiredHarnessArgument(parsed.values, "--captured-at"),
+    ...(parsed.values["--media-type"] === undefined ? {} : { mediaType: parsed.values["--media-type"] }),
+    ...(parsed.values["--sha256"] === undefined ? {} : { expectedDigest: parsed.values["--sha256"] }),
+  });
+  if (parsed.json) printJson(context, output);
+  else context.stdout(`Imported evidence ${output.artifactId} ${output.digest}; bundle ${output.evidenceBundleId} ${output.evidenceBundleDigest}`);
+  return exitCodes.success;
+}
+
+async function runNextCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseHarnessArguments(args, ["--request", "--artifact-root", "--target-workspace"]);
+  const requestPath = absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--request"));
+  const request = parseHarnessRequest(await readJsonFile(requestPath));
+  const output = await runNextHarness({
+    request,
+    artifactRoot: absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--artifact-root")),
+    targetWorkspace: absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--target-workspace")),
+    context: context.harnessContext ?? { now: context.now },
+  });
+  harnessOutput(context, parsed.json, output);
+  return output.status === "VERIFIED" ? exitCodes.success : output.status === "FAILED" ? exitCodes.failed : exitCodes.blocked;
 }
 
 async function initContract(
@@ -444,6 +535,13 @@ async function dispatch(
     context.stdout(CLI_VERSION);
     return exitCodes.success;
   }
+  if (
+    (command === "status" || command === "run-next" || command === "show-report" || command === "import-evidence") &&
+    subcommand === "--help" && rest.length === 0
+  ) {
+    context.stdout(help);
+    return exitCodes.success;
+  }
   if (command === "init") {
     return initContract(
       subcommand === undefined ? rest : [subcommand, ...rest],
@@ -460,6 +558,10 @@ async function dispatch(
   if (command === "run") return runCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
   if (command === "packs") return packsCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
   if (command === "backends") return backendsCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "status") return statusCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "run-next") return runNextCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "show-report") return showReportCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "import-evidence") return importEvidenceCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
   if (command === "contract" && subcommand === "validate") {
     return validateContractCommand(rest, context);
   }

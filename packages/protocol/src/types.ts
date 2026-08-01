@@ -254,6 +254,7 @@ export type RunStatus =
   | "pending"
   | "running"
   | "succeeded"
+  | "AWAITING_EVIDENCE"
   | "failed"
   | "cancelled";
 
@@ -298,6 +299,14 @@ export interface Evidence {
   id: string;
   observedAt: string;
   artifact: ArtifactReference;
+  /** Present only for evidence imported from a provider outside this runtime. */
+  source?: {
+    kind: "external";
+  };
+  /** The producer is explicit so imported bytes cannot be mistaken for runtime proof. */
+  producer?: {
+    runtime: "external";
+  };
   citations?: Citation[];
   metadata?: Record<string, JsonValue>;
 }
@@ -313,6 +322,8 @@ export interface VerificationGate {
   schemaVersion: SchemaVersion;
   id: string;
   required: boolean;
+  /** A typed, schema-backed indication that this gate waits for imported evidence. */
+  evidenceRequirement?: "external";
   description?: string;
 }
 

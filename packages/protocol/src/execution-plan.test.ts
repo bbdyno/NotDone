@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   requiredVerificationGates,
+  requiresExternalEvidence,
   verificationGateSatisfied,
 } from "./execution-plan.js";
 import { validateExecutionPlan } from "./schema-registry.js";
@@ -123,6 +124,30 @@ describe("provider-neutral execution plans", () => {
     expect(verificationGateSatisfied(requiredGate, verificationReport)).toBe(true);
     expect(verificationGateSatisfied(requiredGate, undefined)).toBe(false);
     expect(verificationGateSatisfied(optionalGate, undefined)).toBe(true);
+  });
+
+  it("uses a schema-backed discriminator for external evidence gates", () => {
+    const externalGate: VerificationGate = {
+      schemaVersion: SCHEMA_VERSION,
+      id: "gate.device-proof",
+      required: true,
+      evidenceRequirement: "external",
+    };
+    const executionPlan = {
+      ...plan([
+        {
+          schemaVersion: SCHEMA_VERSION,
+          id: "step.verify",
+          capability: "verify",
+          verificationGateIds: [externalGate.id],
+        },
+      ]),
+      verificationGates: [externalGate],
+    };
+
+    expect(validateExecutionPlan(executionPlan)).toMatchObject({ valid: true });
+    expect(requiresExternalEvidence(externalGate)).toBe(true);
+    expect(requiresExternalEvidence({ ...externalGate, evidenceRequirement: undefined })).toBe(false);
   });
 
   it("rejects empty plans and invalid dependency or gate references", () => {

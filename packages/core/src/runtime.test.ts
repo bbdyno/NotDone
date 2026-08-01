@@ -241,4 +241,79 @@ describe("ExecutionRuntime", () => {
     expect(missing.failure?.code).toBe("required-gate-failed");
     expect(swapped.failure?.code).toBe("required-gate-failed");
   });
+
+  it("reports AWAITING_EVIDENCE only for missing or ABSTAIN required external gates", async () => {
+    const automatic: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.automatic", required: true };
+    const external: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.device", required: true, evidenceRequirement: "external" };
+    const executionPlan = plan([{ schemaVersion: SCHEMA_VERSION, id: "step.verify", capability: "verify", verificationGateIds: [automatic.id, external.id] }], [automatic, external]);
+    const reports = (verdict: "ABSTAIN" | undefined) => backend(["verify"], async () => ({
+      verificationReports: [
+        { schemaVersion: SCHEMA_VERSION, id: "report.automatic", createdAt: timestamp, gateId: automatic.id, verdict: "PASS" },
+        ...(verdict === undefined ? [] : [{ schemaVersion: SCHEMA_VERSION, id: "report.external", createdAt: timestamp, gateId: external.id, verdict }]),
+      ],
+    }));
+
+    const missing = await new ExecutionRuntime([reports(undefined)]).execute(executionPlan, { runId: "run.external.missing" });
+    const abstained = await new ExecutionRuntime([reports("ABSTAIN")]).execute(executionPlan, { runId: "run.external.abstain" });
+
+    expect(missing.run.status).toBe("AWAITING_EVIDENCE");
+    expect(missing.awaitingEvidenceGateIds).toEqual([external.id]);
+    expect(missing.failure).toBeUndefined();
+    expect(abstained.run.status).toBe("AWAITING_EVIDENCE");
+  });
+
+  it("prioritizes required FAIL or ERROR over external evidence waiting", async () => {
+    const automatic: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.automatic", required: true };
+    const external: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.device", required: true, evidenceRequirement: "external" };
+    const executionPlan = plan([{ schemaVersion: SCHEMA_VERSION, id: "step.verify", capability: "verify", verificationGateIds: [automatic.id, external.id] }], [automatic, external]);
+    for (const verdict of ["FAIL", "ERROR"] as const) {
+      const result = await new ExecutionRuntime([backend(["verify"], async () => ({
+        verificationReports: [{ schemaVersion: SCHEMA_VERSION, id: `report.${verdict}`, createdAt: timestamp, gateId: external.id, verdict }],
+      }))]).execute(executionPlan, { runId: `run.external.${verdict}` });
+      expect(result.run.status).toBe("failed");
+      expect(result.failure?.code).toBe("required-gate-failed");
+    }
+    const regularFailure = await new ExecutionRuntime([backend(["verify"], async () => ({
+      verificationReports: [{ schemaVersion: SCHEMA_VERSION, id: "report.automatic", createdAt: timestamp, gateId: automatic.id, verdict: "FAIL" }],
+    }))]).execute(executionPlan, { runId: "run.external.with-failure" });
+    expect(regularFailure.run.status).toBe("failed");
+  });
+
+  it("keeps optional external gates and non-external ABSTAIN gates compatible", async () => {
+    const optionalExternal: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.optional-device", required: false, evidenceRequirement: "external" };
+    const optional = await new ExecutionRuntime([backend(["verify"], async () => ({ verificationReports: [] }))]).execute(
+      plan([{ schemaVersion: SCHEMA_VERSION, id: "step.verify", capability: "verify", verificationGateIds: [optionalExternal.id] }], [optionalExternal]),
+      { runId: "run.optional-external" },
+    );
+    const human: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.human", required: true };
+    const humanResult = await new ExecutionRuntime([backend(["verify"], async () => ({
+      verificationReports: [{ schemaVersion: SCHEMA_VERSION, id: "report.human", createdAt: timestamp, gateId: human.id, verdict: "ABSTAIN" }],
+    }))]).execute(
+      plan([{ schemaVersion: SCHEMA_VERSION, id: "step.verify", capability: "verify", verificationGateIds: [human.id] }], [human]),
+      { runId: "run.human-abstain" },
+    );
+
+    expect(optional.run.status).toBe("succeeded");
+    expect(humanResult.run.status).toBe("failed");
+    expect(humanResult.run.status).not.toBe("AWAITING_EVIDENCE");
+  });
+
+  it("requires an admitted digest-bound bundle for external PASS reports", async () => {
+    const gate: VerificationGate = { schemaVersion: SCHEMA_VERSION, id: "gate.external-pass", required: true, evidenceRequirement: "external" };
+    const executionPlan = plan([{ schemaVersion: SCHEMA_VERSION, id: "step.verify", capability: "verify", verificationGateIds: [gate.id] }], [gate]);
+    const expected = { schemaVersion: SCHEMA_VERSION, artifactId: "bundle.expected", digest: "a".repeat(64) } as const;
+    const report = (evidenceBundle?: typeof expected): ExecutionBackend => backend(["verify"], async () => ({
+      verificationReports: [{ schemaVersion: SCHEMA_VERSION, id: "report.external-pass", createdAt: timestamp, gateId: gate.id, verdict: "PASS", ...(evidenceBundle === undefined ? {} : { evidenceBundle }) }],
+    }));
+
+    const missingBoth = await new ExecutionRuntime([report()]).execute(executionPlan, { runId: "run.external-pass.missing" });
+    const arbitraryOnly = await new ExecutionRuntime([report({ ...expected, artifactId: "bundle.arbitrary" })]).execute(executionPlan, { runId: "run.external-pass.arbitrary" });
+    const missingReportBundle = await new ExecutionRuntime([report()]).execute(executionPlan, { runId: "run.external-pass.no-report-bundle", requiredEvidenceBundles: { [gate.id]: expected } });
+    const matched = await new ExecutionRuntime([report(expected)]).execute(executionPlan, { runId: "run.external-pass.matched", requiredEvidenceBundles: { [gate.id]: expected } });
+
+    expect(missingBoth.run.status).toBe("failed");
+    expect(arbitraryOnly.run.status).toBe("failed");
+    expect(missingReportBundle.run.status).toBe("failed");
+    expect(matched.run.status).toBe("succeeded");
+  });
 });

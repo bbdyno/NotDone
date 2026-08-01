@@ -15,6 +15,11 @@ export function requiredVerificationGates(
   return (plan.verificationGates ?? []).filter((gate) => gate.required);
 }
 
+/** True only for the portable discriminator, never inferred from identifiers or text. */
+export function requiresExternalEvidence(gate: VerificationGate): boolean {
+  return gate.evidenceRequirement === "external";
+}
+
 export function verificationGateSatisfied(
   gate: VerificationGate,
   report: VerificationReport | undefined,

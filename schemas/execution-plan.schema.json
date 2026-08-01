@@ -89,6 +89,7 @@
         "schemaVersion": { "const": "1.0" },
         "id": { "$ref": "#/$defs/id" },
         "required": { "type": "boolean" },
+        "evidenceRequirement": { "enum": ["external"] },
         "description": { "type": "string" }
       }
     }

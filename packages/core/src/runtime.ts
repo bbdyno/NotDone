@@ -1,6 +1,7 @@
 import {
   SCHEMA_VERSION,
   assertExecutionPlan,
+  requiresExternalEvidence,
   verificationGateSatisfied,
   type Artifact,
   type ArtifactReference,
@@ -62,6 +63,8 @@ export interface RuntimeRunResult {
   artifacts: Artifact[];
   evidenceBundles: EvidenceBundle[];
   verificationReports: VerificationReport[];
+  /** Required external gates that have not yet produced a PASS report. */
+  awaitingEvidenceGateIds?: string[];
   failure?: RuntimeFailure;
 }
 
@@ -229,13 +232,43 @@ export class ExecutionRuntime {
       );
     }
 
+    const awaitingEvidenceGateIds: string[] = [];
     for (const gate of plan.verificationGates ?? []) {
+      if (!gate.required) {
+        continue;
+      }
       const report = verificationReports.find((item) => item.gateId === gate.id);
       const expectedEvidenceBundle = requiredEvidenceBundles === undefined
         ? requiredEvidenceBundle
         : requiredEvidenceBundles[gate.id];
+      if (report?.verdict === "FAIL" || report?.verdict === "ERROR") {
+        return fail(
+          "required-gate-failed",
+          `Required verification gate did not pass: ${gate.id}.`,
+        );
+      }
       if (
-        (gate.required && requiredEvidenceBundles !== undefined && expectedEvidenceBundle === undefined) ||
+        requiresExternalEvidence(gate) &&
+        (report === undefined || report.verdict === "ABSTAIN")
+      ) {
+        awaitingEvidenceGateIds.push(gate.id);
+        continue;
+      }
+      if (requiresExternalEvidence(gate)) {
+        if (
+          requiredEvidenceBundles === undefined ||
+          expectedEvidenceBundle === undefined ||
+          !verificationGateSatisfied(gate, report, expectedEvidenceBundle)
+        ) {
+          return fail(
+            "required-gate-failed",
+            `Required external evidence gate did not pass: ${gate.id}.`,
+          );
+        }
+        continue;
+      }
+      if (
+        (requiredEvidenceBundles !== undefined && expectedEvidenceBundle === undefined) ||
         !verificationGateSatisfied(gate, report, expectedEvidenceBundle)
       ) {
         return fail(
@@ -243,6 +276,16 @@ export class ExecutionRuntime {
           `Required verification gate did not pass: ${gate.id}.`,
         );
       }
+    }
+    if (awaitingEvidenceGateIds.length > 0) {
+      run.status = "AWAITING_EVIDENCE";
+      return {
+        run,
+        artifacts: [...artifacts.values()],
+        evidenceBundles,
+        verificationReports,
+        awaitingEvidenceGateIds,
+      };
     }
     run.status = "succeeded";
     return {

@@ -13,3 +13,4 @@ export * from "./semantic-validation.js";
 export * from "./trust.js";
 export * from "./verify.js";
 export * from "./verify-only.js";
+export * from "./workspace-preflight.js";

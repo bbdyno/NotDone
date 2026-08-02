@@ -177,6 +177,14 @@ function preflightMetadata(preflight: WorkspacePreflightResult): {
   if (!BASELINE_SHA_PATTERN.test(repositoryHead)) {
     throw fail("invalid-baseline", "The frozen baseline is not a full Git object identifier.");
   }
+  try {
+    const snapshot = JSON.parse(metadata.snapshotJson) as { repositoryRoot?: unknown; repositoryHead?: unknown; runId?: unknown };
+    if (snapshot.repositoryRoot !== repositoryRoot) throw fail("workspace-mismatch", "The preflight workspace root does not match its immutable task snapshot.");
+    if (snapshot.repositoryHead !== repositoryHead || snapshot.runId !== runId || sha256Json(snapshot) !== metadata.snapshotDigest) throw fail("invalid-preflight", "The frozen workspace preflight is inconsistent.");
+  } catch (error) {
+    if (error instanceof BaselineDiffEvidenceError) throw error;
+    throw fail("invalid-preflight", "The frozen workspace preflight is inconsistent.");
+  }
   return { root: repositoryRoot, baselineSha: repositoryHead, runId };
 }
 

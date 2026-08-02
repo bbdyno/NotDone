@@ -1,11 +1,14 @@
 # NotDone protocol v1
 
-NotDone exchanges five runtime-neutral documents. Every document declares
+NotDone exchanges runtime-neutral, schema-backed documents. Every document declares
 `schemaVersion: "1.0"` and is validated with JSON Schema Draft 2020-12.
 
 | Document | Purpose |
 | --- | --- |
 | Task contract | Freezes the claims and checks that define completion. |
+| Goal Plan | Defines Task dependencies, acceptance criteria, path scope, verifier requirements, retry limits, and completion policy. |
+| Execution plan | Selects provider-neutral capabilities and verification gates under an explicit policy. |
+| Workspace baseline | Binds a Git revision to a verified file inventory and predecessor proof lineage. |
 | Runtime event | Normalizes lifecycle and tool events from supported agents. |
 | Evidence record | Captures what was observed, who produced it, and its trust level. |
 | Verification result | Records the deterministic decision for every claim and check. |

@@ -9,9 +9,11 @@ import {
   type Artifact,
   type JsonValue,
   type TaskContract,
+  type VerifiedWorkspaceBaseline,
 } from "@notdone/protocol";
 
 import { assertValidContract } from "./semantic-validation.js";
+import { inspectWorkspaceAgainstBaseline } from "./workspace-baseline.js";
 
 const execFileAsync = promisify(execFile);
 const TASK_SNAPSHOT_MEDIA_TYPE = "application/vnd.notdone.task-snapshot+json";
@@ -39,6 +41,7 @@ export interface WorkspacePreflightOptions {
   contract: TaskContract;
   runId: string;
   now?: () => Date;
+  workspaceBaseline?: VerifiedWorkspaceBaseline;
 }
 
 export interface TaskSnapshotMetadata extends Record<string, JsonValue> {
@@ -52,6 +55,7 @@ export interface TaskSnapshotMetadata extends Record<string, JsonValue> {
   readonly repositoryHead: string;
   readonly snapshotJson: string;
   readonly snapshotDigest: string;
+  readonly workspaceBaselineDigest?: string;
 }
 
 export type ImmutableTaskSnapshotArtifact = Readonly<
@@ -64,7 +68,7 @@ export interface WorkspacePreflightResult {
   readonly repository: Readonly<{
     root: string;
     head: string;
-    dirty: false;
+    dirty: boolean;
   }>;
   readonly taskSnapshot: ImmutableTaskSnapshotArtifact;
 }
@@ -79,6 +83,7 @@ interface TaskSnapshotPayload {
   repositoryRoot: string;
   repositoryHead: string;
   createdAt: string;
+  workspaceBaselineDigest?: string;
 }
 
 function gitError(action: string): WorkspacePreflightError {
@@ -150,6 +155,7 @@ function createTaskSnapshot(
   repositoryRoot: string,
   repositoryHead: string,
   createdAt: string,
+  workspaceBaseline?: VerifiedWorkspaceBaseline,
 ): ImmutableTaskSnapshotArtifact {
   const contractJson = canonicalizeJson(contract);
   const contractDigest = sha256Json(contract);
@@ -163,6 +169,7 @@ function createTaskSnapshot(
     repositoryRoot,
     repositoryHead,
     createdAt,
+    ...(workspaceBaseline === undefined ? {} : { workspaceBaselineDigest: workspaceBaseline.workspaceDigest }),
   };
   const snapshotJson = canonicalizeJson(payload);
   const snapshotDigest = sha256Json(payload);
@@ -177,6 +184,7 @@ function createTaskSnapshot(
     repositoryHead,
     snapshotJson,
     snapshotDigest,
+    ...(workspaceBaseline === undefined ? {} : { workspaceBaselineDigest: workspaceBaseline.workspaceDigest }),
   } satisfies TaskSnapshotMetadata);
 
   return Object.freeze({
@@ -195,6 +203,7 @@ export async function preflightWorkspace({
   contract,
   runId,
   now = () => new Date(),
+  workspaceBaseline,
 }: WorkspacePreflightOptions): Promise<WorkspacePreflightResult> {
   assertValidContract(contract);
 
@@ -234,23 +243,24 @@ export async function preflightWorkspace({
     );
   }
 
-  const status = await git(
-    repositoryRoot,
-    ["status", "--porcelain=v1", "--untracked-files=all"],
-    "checking worktree cleanliness",
-  );
-  if (status.length > 0) {
-    throw new WorkspacePreflightError(
-      "dirty-worktree",
-      "The repository has tracked or untracked worktree changes.",
-    );
+  const status = await git(repositoryRoot, ["status", "--porcelain=v1", "--untracked-files=all"], "checking worktree cleanliness");
+  if (workspaceBaseline === undefined && status.length > 0) {
+    throw new WorkspacePreflightError("dirty-worktree", "The repository has tracked or untracked worktree changes.");
+  }
+  if (workspaceBaseline !== undefined) {
+    let inspection;
+    try { inspection = await inspectWorkspaceAgainstBaseline(repositoryRoot, workspaceBaseline, now); }
+    catch { throw new WorkspacePreflightError("baseline-mismatch", "The workspace does not match the supplied verified baseline."); }
+    if (!inspection.matches || workspaceBaseline.baseRevision !== repositoryHead) {
+      throw new WorkspacePreflightError("baseline-mismatch", "The workspace does not match the supplied verified baseline.");
+    }
   }
 
   const createdAt = now().toISOString();
   const repository = Object.freeze({
     root: repositoryRoot,
     head: repositoryHead,
-    dirty: false as const,
+    dirty: status.length > 0,
   });
   const taskSnapshot = createTaskSnapshot(
     contract,
@@ -258,6 +268,7 @@ export async function preflightWorkspace({
     repositoryRoot,
     repositoryHead,
     createdAt,
+    workspaceBaseline,
   );
 
   return Object.freeze({ repository, taskSnapshot });

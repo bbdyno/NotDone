@@ -1,4 +1,4 @@
-<!-- docs-revision: 3 -->
+<!-- docs-revision: 4 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="상태: v0.1.1">
+  <img src="https://img.shields.io/badge/status-v0.2.0-blue" alt="상태: v0.2.0">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="라이선스: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 이상">
@@ -33,7 +33,7 @@
 NotDone은 AI 코딩 에이전트를 위한 런타임 중립 완료 증명 계층입니다. 완료 조건을 기계가 읽을 수 있는 계약으로 고정하고, 실제 도구에서 증거를 수집한 뒤 에이전트가 작업을 완료했다고 말할 자격이 있는지 독립적으로 검증합니다.
 
 > [!NOTE]
-> v0.1.1이 현재 릴리스입니다. 소스 빌드, 독립 npm 패키지, 세 런타임 연동은 릴리스 워크플로에서 검증됩니다.
+> v0.2.0이 현재 릴리스입니다. 소스 빌드, 독립 npm 패키지, 세 런타임 연동은 릴리스 워크플로에서 검증됩니다.
 
 ## 왜 필요한가요?
 
@@ -81,6 +81,34 @@ notdone contract validate
 notdone verify
 notdone proof inspect .notdone/proofs/<run-id>.proof.json
 ```
+
+### 자율 목표 워크플로
+
+엄격한 Goal Plan을 `.notdone/goal.json`에 두면 NotDone이 READY Task를
+JIT 계약으로 컴파일하고 동결한 뒤, 실행·독립 검증·제한된 재시도·후속
+Task 진행을 자동화합니다. 기존 `run-next`는 저수준 전문가 명령으로
+그대로 유지됩니다.
+
+```shell
+notdone goal validate
+notdone goal run --until human-evidence --max-retries 2
+notdone evidence pending
+```
+
+사람이 필요한 증거는 queue에만 모입니다. 파일을 검토한 사람은
+`notdone evidence submit ... --attest`로 digest에 명시적으로 PASS를
+결합해야 하며, 단순 import는 PASS를 만들지 않습니다. 제출 후에는
+다음 명령으로 계속합니다.
+
+```shell
+notdone goal resume
+```
+
+[Goal Plan 예제](examples/goal-plan.json),
+[Goal Plan 스키마](schemas/goal-plan.schema.json),
+[Workspace Baseline 스키마](schemas/workspace-baseline.schema.json)를
+참고하세요. PASS 결과는 Git revision, 검증 report, task snapshot,
+workspace digest, output inventory를 묶은 successor baseline이 됩니다.
 
 ### Claude Code
 
@@ -193,8 +221,10 @@ claims:
 
 ## 프로젝트 상태
 
-v0.1.1 릴리스에는 다음 기능이 포함되어 있습니다.
+v0.2.0 릴리스에는 다음 기능이 포함되어 있습니다.
 
+- Goal Plan, JIT Task 컴파일, 상태 재조정, 제한된 retry, successor baseline,
+  Human Evidence Queue;
 - 버전이 부여된 protocol schema, canonical JSON, SHA-256 packet integrity
 - 결정적인 command, file, Git diff 검증
 - 독립 실행 가능한 `notdone` CLI와 `notdone-mcp` 패키지

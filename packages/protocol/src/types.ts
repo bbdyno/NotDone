@@ -95,6 +95,82 @@ export interface TaskContract {
   metadata?: Record<string, JsonValue>;
 }
 
+export interface GoalAcceptanceCriterion {
+  id: string;
+  statement: string;
+  checks: Array<CommandCheck | FileCheck>;
+}
+
+export interface GoalAutomaticVerifier {
+  id: string;
+  kind: "automatic";
+  description?: string;
+}
+
+export interface HumanEvidenceRequirement {
+  id: string;
+  description: string;
+  instructions: string;
+  mediaTypes?: string[];
+}
+
+export interface GoalTaskTemplate {
+  taskId: string;
+  title: string;
+  description?: string;
+  dependsOn?: string[];
+  acceptanceCriteria: GoalAcceptanceCriterion[];
+  allowedPaths: string[];
+  requiredPaths: string[];
+  forbiddenPaths: string[];
+  requiredVerifiers: GoalAutomaticVerifier[];
+  humanEvidenceRequirements: HumanEvidenceRequirement[];
+  retryPolicy: {
+    maxAttempts: number;
+    retryOn: Array<"execution-failed" | "verification-failed">;
+  };
+  completionPolicy: {
+    requiredCriteria: "all";
+    humanEvidence: "required";
+  };
+}
+
+export interface GoalPlan {
+  schemaVersion: SchemaVersion;
+  id: string;
+  title: string;
+  description?: string;
+  createdAt: string;
+  execution?: {
+    adapter?: "codex-exec";
+    executable?: string;
+    timeoutMs?: number;
+    externalNetwork?: "allow";
+  };
+  tasks: GoalTaskTemplate[];
+}
+
+export interface WorkspaceBaselineFile {
+  path: string;
+  kind: "file" | "symlink";
+  digest: string;
+  size: number;
+}
+
+export interface VerifiedWorkspaceBaseline {
+  schemaVersion: SchemaVersion;
+  id: string;
+  createdAt: string;
+  baseRevision: string;
+  workspaceDigest: string;
+  files: WorkspaceBaselineFile[];
+  predecessor?: {
+    runId: string;
+    verificationReportIds: string[];
+    taskSnapshotDigest: string;
+  };
+}
+
 export interface EvidenceRecord {
   schemaVersion: SchemaVersion;
   id: string;

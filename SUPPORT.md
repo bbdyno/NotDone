@@ -1,6 +1,6 @@
 # Support
 
-NotDone is currently released as v0.1.1.
+NotDone is currently released as v0.2.0.
 
 - Use GitHub Discussions for usage questions and design feedback when available.
 - Use GitHub Issues for reproducible bugs and feature requests.

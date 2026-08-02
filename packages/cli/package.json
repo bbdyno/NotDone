@@ -1,6 +1,6 @@
 {
   "name": "notdone",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Command-line interface for NotDone proof verification",
   "license": "Apache-2.0",
   "type": "module",
@@ -39,7 +39,7 @@
     "test:self": "vitest run src/harness-self.test.ts",
     "typecheck": "tsc -b --pretty false"
   },
-  "dependencies": {
+  "devDependencies": {
     "@notdone/codex-exec-adapter": "workspace:*",
     "@notdone/core": "workspace:*",
     "@notdone/protocol": "workspace:*"

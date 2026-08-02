@@ -1,4 +1,4 @@
-<!-- docs-revision: 3 -->
+<!-- docs-revision: 4 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="Status: v0.1.1">
+  <img src="https://img.shields.io/badge/status-v0.2.0-blue" alt="Status: v0.2.0">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 or later">
@@ -33,7 +33,7 @@
 NotDone is a runtime-neutral proof-of-completion layer for AI coding agents. It turns acceptance criteria into a machine-readable contract, captures evidence from real tools, and independently verifies whether an agent has earned the right to call a task complete.
 
 > [!NOTE]
-> v0.1.1 is the current release. Its source build, standalone npm packages, and all three runtime integrations are validated by the release workflow.
+> v0.2.0 is the current release. Its source build, standalone npm packages, and all three runtime integrations are validated by the release workflow.
 
 ## Why NotDone?
 
@@ -83,6 +83,54 @@ notdone contract validate
 notdone verify
 notdone proof inspect .notdone/proofs/<run-id>.proof.json
 ```
+
+### Autonomous goal workflow
+
+Put a strict Goal Plan at `.notdone/goal.json`, then let NotDone compile and
+freeze each ready Task just in time:
+
+```shell
+notdone goal validate
+notdone goal run --until human-evidence --max-retries 2
+```
+
+The orchestrator reconciles durable reports with state, selects the next Task
+whose dependencies passed, freezes an immutable request, runs the configured
+agent adapter, verifies real evidence, and either advances, performs a bounded
+retry, or queues only the evidence that requires a person. `run-next` remains
+available as the low-level expert command.
+
+```text
+Goal Plan → ready Task → frozen contract → agent run → independent verification
+                ↑                                      ↓
+       successor baseline ← PASS         retry / human evidence queue
+```
+
+List human-only work with:
+
+```shell
+notdone evidence pending
+```
+
+After reviewing a captured file, explicitly bind the human PASS report to its
+digest. Importing bytes alone never creates PASS evidence.
+
+```shell
+notdone evidence submit \
+  --task-id device-review \
+  --requirement-id gate.device-review.human \
+  --file ./device-capture.png \
+  --media-type image/png \
+  --captured-at 2026-08-02T00:00:00Z \
+  --attest
+notdone goal resume
+```
+
+See the [Goal Plan example](examples/goal-plan.json), the
+[Goal Plan schema](schemas/goal-plan.schema.json), and the
+[Workspace Baseline schema](schemas/workspace-baseline.schema.json). Durable
+artifacts default to a hidden sibling of the target repository so agent output
+and NotDone records cannot contaminate each other.
 
 ### Claude Code
 
@@ -152,9 +200,9 @@ The supported compositions are Retrieve, Verify, Run, Retrieve → Run, Run → 
 ## Architecture
 
 ```text
-Task request
+Goal Plan or task request
     ↓
-Frozen task contract
+JIT-compiled, frozen task contract
     ↓
 Agent work + normalized runtime events
     ↓
@@ -163,6 +211,8 @@ Evidence captured by NotDone
 Deterministic verification
     ↓
 Proof packet + report + completion gate
+    ↓
+Verified successor baseline or human evidence queue
 ```
 
 A contract links each required claim to one or more checks:
@@ -199,8 +249,10 @@ The local v0.1 implementation targets an honest-but-fallible agent. It detects u
 
 ## Project status
 
-The v0.1.1 release includes:
+The v0.2.0 release includes:
 
+- machine-readable Goal Plans, JIT Task compilation, state reconciliation,
+  bounded retries, successor baselines, and a Human Evidence Queue;
 - versioned protocol schemas, canonical JSON, and SHA-256 packet integrity;
 - deterministic command, file, and Git-diff verification;
 - standalone `notdone` CLI and `notdone-mcp` packages;

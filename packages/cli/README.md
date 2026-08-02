@@ -10,6 +10,32 @@ notdone init
 notdone verify
 ```
 
+## Autonomous goals
+
+Store a schema-valid plan at `.notdone/goal.json` (see the bundled
+`dist/schemas/goal-plan.schema.json`), then run:
+
+```sh
+notdone goal validate
+notdone goal run --until human-evidence --max-retries 2
+```
+
+NotDone compiles each ready Task into a frozen request, runs and independently
+verifies it, retries only policy-approved failures, and creates a verified
+successor baseline before selecting the next Task. Uncommitted PASS output can
+therefore be inherited without treating it as unverified workspace state.
+
+```sh
+notdone evidence pending
+notdone evidence submit --task-id TASK --requirement-id GATE \
+  --file CAPTURE --captured-at ISO-8601 --attest
+notdone goal resume
+```
+
+`--attest` is deliberately required: imported bytes alone never create a PASS
+report. Durable artifacts default to a hidden sibling of the target repository;
+override that location with `--artifact-root` when needed.
+
 See the repository README for task contracts, evidence trust levels, exit
 codes, and Claude Code, Codex, and Gemini CLI integrations.
 

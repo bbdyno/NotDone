@@ -7,6 +7,27 @@ public release candidate is versioned `0.1.0`.
 
 ## Unreleased
 
+## 0.2.0 - 2026-08-02
+
+### Added
+
+- A strict Goal Plan JSON Schema and JIT Task compiler for dependency-ordered,
+  machine-readable autonomous work.
+- `notdone goal run`, `notdone goal resume`, and `notdone goal validate` while
+  preserving `run-next` as the low-level expert workflow.
+- A state reconciler and bounded retry controller that preserve every failed
+  request and report without weakening acceptance criteria or path limits.
+- Verified Workspace Baselines that bind Git revision, predecessor PASS
+  reports, immutable task snapshots, workspace digests, and output inventory.
+- A Human Evidence Queue with `evidence pending` and explicit, digest-bound
+  `evidence submit --attest` reports.
+- Published Goal Plan and Workspace Baseline schemas in both npm packages.
+
+### Changed
+
+- Expanded the product from a single-task proof runner to a goal-level
+  orchestration harness while retaining all existing verification commands.
+
 ## 0.1.1 - 2026-07-25
 
 ### Changed

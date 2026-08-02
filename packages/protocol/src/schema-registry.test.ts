@@ -5,15 +5,18 @@ import {
   SchemaValidationError,
   assertTaskContract,
   validateEvidence,
+  validateGoalPlan,
   validateProofPacket,
   validateRuntimeEvent,
   validateTaskContract,
+  validateWorkspaceBaseline,
 } from "./schema-registry.js";
 import type {
   EvidenceRecord,
   ProofPacket,
   TaskContract,
   VerificationResult,
+  GoalPlan,
 } from "./types.js";
 
 const timestamp = "2026-07-20T05:00:00.000Z";
@@ -161,5 +164,39 @@ describe("schema registry", () => {
 
     expect(validateTaskContract(invalid)).toMatchObject({ valid: false });
     expect(() => assertTaskContract(invalid)).toThrow(SchemaValidationError);
+  });
+
+  it("validates machine-readable goal plans and rejects dependency cycles", () => {
+    const goal: GoalPlan = {
+      schemaVersion: "1.0",
+      id: "goal.release",
+      title: "Release",
+      createdAt: timestamp,
+      tasks: [{
+        taskId: "task.build",
+        title: "Build",
+        acceptanceCriteria: [{ id: "criterion.build", statement: "The build passes.", checks: [{ id: "check.build", type: "command", command: "pnpm build", expect: { exitCode: 0 } }] }],
+        allowedPaths: ["packages/**"],
+        requiredPaths: [],
+        forbiddenPaths: ["secrets/**"],
+        requiredVerifiers: [{ id: "gate.automatic", kind: "automatic" }],
+        humanEvidenceRequirements: [],
+        retryPolicy: { maxAttempts: 2, retryOn: ["verification-failed"] },
+        completionPolicy: { requiredCriteria: "all", humanEvidence: "required" },
+      }],
+    };
+    expect(validateGoalPlan(goal)).toMatchObject({ valid: true });
+    expect(validateGoalPlan({ ...goal, tasks: [{ ...goal.tasks[0], dependsOn: ["task.build"] }] })).toMatchObject({ valid: false });
+  });
+
+  it("validates portable workspace baselines", () => {
+    expect(validateWorkspaceBaseline({
+      schemaVersion: "1.0",
+      id: "baseline.example",
+      createdAt: timestamp,
+      baseRevision: "a".repeat(40),
+      workspaceDigest: digest,
+      files: [{ path: "result.txt", kind: "file", digest, size: 1 }],
+    })).toMatchObject({ valid: true });
   });
 });

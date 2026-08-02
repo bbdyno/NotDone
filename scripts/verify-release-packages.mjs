@@ -10,6 +10,7 @@ import { spawn } from "node:child_process";
 
 const repositoryRoot = resolve(import.meta.dirname, "..");
 const artifactsDirectory = resolve(repositoryRoot, "artifacts");
+const releaseVersion = JSON.parse(await readFile(resolve(repositoryRoot, "package.json"), "utf8")).version;
 
 function run(command, args, cwd = repositoryRoot) {
   return new Promise((resolveRun, reject) => {
@@ -109,7 +110,7 @@ function probeMcpServer(command, cwd) {
           capabilities: {},
           clientInfo: {
             name: "notdone-package-verifier",
-            version: "0.1.1",
+            version: releaseVersion,
           },
         },
       })}\n`,
@@ -123,8 +124,8 @@ const artifacts = (await readdir(artifactsDirectory))
 
 if (
   artifacts.length !== 2 ||
-  !artifacts.includes("notdone-0.1.1.tgz") ||
-  !artifacts.includes("notdone-mcp-0.1.1.tgz")
+  !artifacts.includes(`notdone-${releaseVersion}.tgz`) ||
+  !artifacts.includes(`notdone-mcp-${releaseVersion}.tgz`)
 ) {
   throw new Error(`Unexpected release artifacts: ${artifacts.join(", ")}`);
 }
@@ -143,6 +144,8 @@ for (const artifact of artifacts) {
     "package/dist/NOTICE",
     executablePath,
     "package/package.json",
+    "package/dist/schemas/goal-plan.schema.json",
+    "package/dist/schemas/workspace-baseline.schema.json",
   ]) {
     if (!listing.stdout.split("\n").includes(requiredPath)) {
       throw new Error(`${basename(artifact)} is missing ${requiredPath}`);
@@ -164,8 +167,19 @@ try {
 
   const notdonePath = resolve(installDirectory, "node_modules/.bin/notdone");
   const version = await run(notdonePath, ["--version"], installDirectory);
-  if (version.stdout.trim() !== "0.1.1") {
+  if (version.stdout.trim() !== releaseVersion) {
     throw new Error(`Unexpected CLI version: ${version.stdout.trim()}`);
+  }
+  const goalValidation = await run(notdonePath, [
+    "goal",
+    "validate",
+    "--plan",
+    resolve(repositoryRoot, "examples/goal-plan.json"),
+    "--json",
+  ], installDirectory);
+  const goalValidationResult = JSON.parse(goalValidation.stdout);
+  if (goalValidationResult.valid !== true || goalValidationResult.goalId !== "goal.example" || goalValidationResult.tasks !== 2) {
+    throw new Error(`Bundled CLI did not validate the Goal Plan example: ${goalValidation.stdout}`);
   }
 
   const packageJson = JSON.parse(

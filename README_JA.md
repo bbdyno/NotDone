@@ -1,4 +1,4 @@
-<!-- docs-revision: 3 -->
+<!-- docs-revision: 4 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="ステータス: v0.1.1">
+  <img src="https://img.shields.io/badge/status-v0.2.0-blue" alt="ステータス: v0.2.0">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="ライセンス: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 以降">
@@ -33,7 +33,7 @@
 NotDone は、AI コーディングエージェント向けのランタイム中立な完了証明レイヤーです。完了条件を機械可読な契約として固定し、実際のツールから証拠を収集して、エージェントがタスクを完了したと言えるかを独立して検証します。
 
 > [!NOTE]
-> v0.1.1 が現在のリリースです。ソースビルド、独立した npm パッケージ、3 つのランタイム連携はリリースワークフローで検証されます。
+> v0.2.0 が現在のリリースです。ソースビルド、独立した npm パッケージ、3 つのランタイム連携はリリースワークフローで検証されます。
 
 ## なぜ NotDone なのか
 
@@ -81,6 +81,31 @@ notdone contract validate
 notdone verify
 notdone proof inspect .notdone/proofs/<run-id>.proof.json
 ```
+
+### 自律ゴールワークフロー
+
+厳密な Goal Plan を `.notdone/goal.json` に置くと、NotDone は READY
+Task を JIT 契約へコンパイルして凍結し、実行、独立検証、制限付き再試行、
+後続 Task への進行を自動化します。既存の `run-next` は低レベルの
+エキスパートコマンドとして残ります。
+
+```shell
+notdone goal validate
+notdone goal run --until human-evidence --max-retries 2
+notdone evidence pending
+```
+
+人にしか確認できない証拠だけがキューに入ります。確認者は
+`notdone evidence submit ... --attest` で PASS を証拠の digest に明示的に
+結び付けます。単なる import は PASS を作りません。その後に再開します。
+
+```shell
+notdone goal resume
+```
+
+[Goal Plan の例](examples/goal-plan.json)、
+[Goal Plan スキーマ](schemas/goal-plan.schema.json)、
+[Workspace Baseline スキーマ](schemas/workspace-baseline.schema.json)を参照してください。
 
 ### Claude Code
 
@@ -191,8 +216,10 @@ claims:
 
 ## プロジェクト状況
 
-v0.1.1 リリースには次の機能が含まれます。
+v0.2.0 リリースには次の機能が含まれます。
 
+- Goal Plan、JIT Task コンパイル、状態調整、制限付き retry、successor
+  baseline、Human Evidence Queue;
 - バージョン付き protocol schema、canonical JSON、SHA-256 packet integrity
 - 決定的な command、file、Git diff 検証
 - 単独で実行できる `notdone` CLI と `notdone-mcp` パッケージ

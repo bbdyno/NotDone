@@ -40,7 +40,7 @@ importers:
         version: link:../../protocol
 
   packages/cli:
-    dependencies:
+    devDependencies:
       '@notdone/codex-exec-adapter':
         specifier: workspace:*
         version: link:../adapters/codex-exec

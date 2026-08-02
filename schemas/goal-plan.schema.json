@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:notdone:schema:goal-plan:v1",
+  "title": "NotDone Machine-readable Goal Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "title", "createdAt", "tasks"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "id": { "$ref": "#/$defs/id" },
+    "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+    "description": { "type": "string", "maxLength": 10000 },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "execution": { "$ref": "#/$defs/execution" },
+    "tasks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/task" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "pathPattern": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "adapter": { "const": "codex-exec" },
+        "executable": { "type": "string", "minLength": 1, "maxLength": 4096 },
+        "timeoutMs": { "type": "integer", "minimum": 1, "maximum": 3600000 },
+        "externalNetwork": { "const": "allow" }
+      }
+    },
+    "acceptanceCriterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "statement", "checks"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "statement": { "type": "string", "minLength": 1, "maxLength": 5000 },
+        "checks": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "oneOf": [
+              { "$ref": "urn:notdone:schema:task-contract:v1#/$defs/commandCheck" },
+              { "$ref": "urn:notdone:schema:task-contract:v1#/$defs/fileCheck" }
+            ]
+          }
+        }
+      }
+    },
+    "verifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "kind": { "const": "automatic" },
+        "description": { "type": "string", "maxLength": 2000 }
+      }
+    },
+    "humanEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description", "instructions"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "description": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "instructions": { "type": "string", "minLength": 1, "maxLength": 10000 },
+        "mediaTypes": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "uniqueItems": true
+        }
+      }
+    },
+    "retryPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maxAttempts", "retryOn"],
+      "properties": {
+        "maxAttempts": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "retryOn": {
+          "type": "array",
+          "items": { "enum": ["execution-failed", "verification-failed"] },
+          "uniqueItems": true
+        }
+      }
+    },
+    "completionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredCriteria", "humanEvidence"],
+      "properties": {
+        "requiredCriteria": { "const": "all" },
+        "humanEvidence": { "const": "required" }
+      }
+    },
+    "task": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "title",
+        "acceptanceCriteria",
+        "allowedPaths",
+        "requiredPaths",
+        "forbiddenPaths",
+        "requiredVerifiers",
+        "humanEvidenceRequirements",
+        "retryPolicy",
+        "completionPolicy"
+      ],
+      "properties": {
+        "taskId": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "description": { "type": "string", "maxLength": 10000 },
+        "dependsOn": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/id" },
+          "uniqueItems": true
+        },
+        "acceptanceCriteria": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/acceptanceCriterion" }
+        },
+        "allowedPaths": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/pathPattern" },
+          "uniqueItems": true
+        },
+        "requiredPaths": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pathPattern" },
+          "uniqueItems": true
+        },
+        "forbiddenPaths": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/pathPattern" },
+          "uniqueItems": true
+        },
+        "requiredVerifiers": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/verifier" }
+        },
+        "humanEvidenceRequirements": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/humanEvidence" }
+        },
+        "retryPolicy": { "$ref": "#/$defs/retryPolicy" },
+        "completionPolicy": { "$ref": "#/$defs/completionPolicy" }
+      }
+    }
+  }
+}

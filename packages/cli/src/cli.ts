@@ -35,8 +35,16 @@ import {
   type HarnessContext,
 } from "./harness.js";
 import { createContractTemplate } from "./template.js";
+import {
+  defaultGoalArtifactRoot,
+  loadGoalPlan,
+  pendingGoalEvidence,
+  runGoal,
+  submitGoalEvidence,
+  type GoalResult,
+} from "./goal.js";
 
-export const CLI_VERSION = "0.1.1";
+export const CLI_VERSION = "0.2.0";
 export const DEFAULT_CONTRACT_PATH = ".notdone/contracts/notdone.json";
 
 export const exitCodes = {
@@ -87,6 +95,11 @@ Usage:
   notdone run-next --request PATH --artifact-root PATH --target-workspace PATH [--json]
   notdone show-report --artifact-root PATH --run-id ID [--gate-id ID] [--json]
   notdone import-evidence --file PATH --artifact-root PATH --run-id ID --gate-id ID --captured-at ISO-8601 [--media-type TYPE] [--sha256 DIGEST] [--json]
+  notdone goal run [--plan PATH] [--target-workspace PATH] [--artifact-root PATH] [--until human-evidence|complete] [--max-retries N] [--json]
+  notdone goal resume [--plan PATH] [--target-workspace PATH] [--artifact-root PATH] [--until human-evidence|complete] [--max-retries N] [--json]
+  notdone goal validate [--plan PATH] [--json]
+  notdone evidence pending [--plan PATH] [--target-workspace PATH] [--artifact-root PATH] [--json]
+  notdone evidence submit --task-id ID --requirement-id ID --file PATH --captured-at ISO-8601 --attest [--plan PATH] [--target-workspace PATH] [--artifact-root PATH] [--media-type TYPE] [--sha256 DIGEST] [--json]
   notdone --version
 
 Exit codes:
@@ -203,6 +216,30 @@ function printJson(context: CliContext, value: unknown): void {
 
 interface HarnessArguments { json: boolean; values: Record<string, string>; }
 
+interface NamedArguments extends HarnessArguments { flags: Set<string>; }
+
+function parseNamedArguments(args: string[], allowedValues: readonly string[], allowedFlags: readonly string[] = []): NamedArguments {
+  const values: Record<string, string> = {};
+  const flags = new Set<string>();
+  let json = false;
+  for (let index = 0; index < args.length; index += 1) {
+    const argument = args[index];
+    if (argument === "--json") { json = true; continue; }
+    if (argument !== undefined && allowedFlags.includes(argument)) {
+      if (flags.has(argument)) throw new CliUsageError(`${argument} may only be provided once.`);
+      flags.add(argument);
+      continue;
+    }
+    if (argument === undefined || !allowedValues.includes(argument)) throw new CliUsageError(`Unknown option: ${argument ?? ""}`);
+    const value = args[index + 1];
+    if (value === undefined || value.startsWith("--")) throw new CliUsageError(`${argument} requires a value.`);
+    if (values[argument] !== undefined) throw new CliUsageError(`${argument} may only be provided once.`);
+    values[argument] = value;
+    index += 1;
+  }
+  return { json, values, flags };
+}
+
 function parseHarnessArguments(args: string[], allowed: readonly string[]): HarnessArguments {
   const values: Record<string, string> = {};
   let json = false;
@@ -277,6 +314,85 @@ async function runNextCommand(args: string[], context: CliContext): Promise<numb
   });
   harnessOutput(context, parsed.json, output);
   return output.status === "VERIFIED" ? exitCodes.success : output.status === "FAILED" ? exitCodes.failed : exitCodes.blocked;
+}
+
+const goalCommonOptions = ["--plan", "--target-workspace", "--artifact-root", "--until", "--max-retries"] as const;
+
+async function goalLocations(values: Record<string, string>, context: CliContext) {
+  const targetWorkspace = absolutePath(context.cwd, values["--target-workspace"] ?? ".");
+  const planPath = absolutePath(context.cwd, values["--plan"] ?? ".notdone/goal.json");
+  const artifactRoot = values["--artifact-root"] === undefined ? defaultGoalArtifactRoot(targetWorkspace) : absolutePath(context.cwd, values["--artifact-root"]);
+  return { targetWorkspace, planPath, artifactRoot, plan: await loadGoalPlan(planPath) };
+}
+
+function goalExitCode(result: GoalResult): number {
+  if (result.status === "COMPLETE") return exitCodes.success;
+  if (result.status === "FAILED") return exitCodes.failed;
+  return exitCodes.blocked;
+}
+
+function printGoalResult(context: CliContext, json: boolean, result: GoalResult): void {
+  if (json) { printJson(context, result); return; }
+  context.stdout(`Goal ${result.goalId}: ${result.status}${result.reason === undefined ? "" : ` (${result.reason})`}`);
+  for (const task of result.tasks) context.stdout(`- ${task.taskId}: ${task.status} (${task.attempts} attempt(s))`);
+  if (result.pendingEvidence.length > 0) {
+    context.stdout(`${result.pendingEvidence.length} human evidence item(s) pending:`);
+    for (const item of result.pendingEvidence) context.stdout(`- ${item.taskId}/${item.requirementId}: ${item.description}`);
+  }
+  context.stdout(`Artifacts: ${result.artifactRoot}`);
+}
+
+async function goalRunCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseNamedArguments(args, goalCommonOptions);
+  const locations = await goalLocations(parsed.values, context);
+  const until = parsed.values["--until"] ?? "human-evidence";
+  if (until !== "human-evidence" && until !== "complete") throw new CliUsageError("--until must be human-evidence or complete.");
+  let maxRetries: number | undefined;
+  if (parsed.values["--max-retries"] !== undefined) {
+    maxRetries = Number(parsed.values["--max-retries"]);
+    if (!Number.isInteger(maxRetries) || maxRetries < 0 || maxRetries > 9) throw new CliUsageError("--max-retries must be an integer from 0 to 9.");
+  }
+  const result = await runGoal({ plan: locations.plan, targetWorkspace: locations.targetWorkspace, artifactRoot: locations.artifactRoot, until, ...(maxRetries === undefined ? {} : { maxRetries }), now: context.now, ...(context.harnessContext === undefined ? {} : { harnessContext: context.harnessContext }) });
+  printGoalResult(context, parsed.json, result);
+  return goalExitCode(result);
+}
+
+async function goalValidateCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseNamedArguments(args, ["--plan"]);
+  const planPath = absolutePath(context.cwd, parsed.values["--plan"] ?? ".notdone/goal.json");
+  const plan = await loadGoalPlan(planPath);
+  const output = { valid: true, goalId: plan.id, tasks: plan.tasks.length, path: planPath };
+  if (parsed.json) printJson(context, output); else context.stdout(`Valid goal plan ${plan.id}: ${plan.tasks.length} task(s).`);
+  return exitCodes.success;
+}
+
+async function evidencePendingCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseNamedArguments(args, ["--plan", "--target-workspace", "--artifact-root"]);
+  const locations = await goalLocations(parsed.values, context);
+  const pending = await pendingGoalEvidence(locations.plan, locations.artifactRoot);
+  if (parsed.json) printJson(context, { goalId: locations.plan.id, pending });
+  else if (pending.length === 0) context.stdout("No human evidence is pending.");
+  else { context.stdout(`${pending.length} human evidence item(s) pending:`); for (const item of pending) { context.stdout(`- ${item.taskId}/${item.requirementId}: ${item.description}`); context.stdout(`  ${item.instructions}`); } }
+  return exitCodes.success;
+}
+
+async function evidenceSubmitCommand(args: string[], context: CliContext): Promise<number> {
+  const parsed = parseNamedArguments(args, ["--plan", "--target-workspace", "--artifact-root", "--task-id", "--requirement-id", "--file", "--captured-at", "--media-type", "--sha256"], ["--attest"]);
+  if (!parsed.flags.has("--attest")) throw new CliUsageError("--attest is required to create a human PASS report.");
+  const locations = await goalLocations(parsed.values, context);
+  const output = await submitGoalEvidence({
+    plan: locations.plan,
+    artifactRoot: locations.artifactRoot,
+    taskId: requiredHarnessArgument(parsed.values, "--task-id"),
+    requirementId: requiredHarnessArgument(parsed.values, "--requirement-id"),
+    file: absolutePath(context.cwd, requiredHarnessArgument(parsed.values, "--file")),
+    capturedAt: requiredHarnessArgument(parsed.values, "--captured-at"),
+    attestedAt: context.now().toISOString(),
+    ...(parsed.values["--media-type"] === undefined ? {} : { mediaType: parsed.values["--media-type"] }),
+    ...(parsed.values["--sha256"] === undefined ? {} : { expectedDigest: parsed.values["--sha256"] }),
+  });
+  if (parsed.json) printJson(context, output); else context.stdout(`Imported and attested ${output.artifactId}; report ${output.reportId}.`);
+  return exitCodes.success;
 }
 
 async function initContract(
@@ -536,7 +652,7 @@ async function dispatch(
     return exitCodes.success;
   }
   if (
-    (command === "status" || command === "run-next" || command === "show-report" || command === "import-evidence") &&
+    (command === "status" || command === "run-next" || command === "show-report" || command === "import-evidence" || command === "goal") &&
     subcommand === "--help" && rest.length === 0
   ) {
     context.stdout(help);
@@ -562,12 +678,16 @@ async function dispatch(
   if (command === "run-next") return runNextCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
   if (command === "show-report") return showReportCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
   if (command === "import-evidence") return importEvidenceCommand(subcommand === undefined ? rest : [subcommand, ...rest], context);
+  if (command === "goal" && (subcommand === "run" || subcommand === "resume")) return goalRunCommand(rest, context);
+  if (command === "goal" && subcommand === "validate") return goalValidateCommand(rest, context);
   if (command === "contract" && subcommand === "validate") {
     return validateContractCommand(rest, context);
   }
   if (command === "evidence" && subcommand === "collect") {
     return collectEvidenceCommand(rest, context);
   }
+  if (command === "evidence" && subcommand === "pending") return evidencePendingCommand(rest, context);
+  if (command === "evidence" && subcommand === "submit") return evidenceSubmitCommand(rest, context);
   if (command === "proof" && subcommand === "inspect") {
     return inspectProofCommand(rest, context);
   }

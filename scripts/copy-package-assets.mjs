@@ -1,4 +1,4 @@
-import { copyFile, mkdir } from "node:fs/promises";
+import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
 const destination = process.argv[2];
@@ -18,4 +18,13 @@ await Promise.all(
       resolve(resolvedDestination, name),
     ),
   ),
+);
+
+const schemaSource = resolve(repositoryRoot, "schemas");
+const schemaDestination = resolve(resolvedDestination, "schemas");
+await mkdir(schemaDestination, { recursive: true });
+await Promise.all(
+  (await readdir(schemaSource))
+    .filter((name) => name.endsWith(".schema.json"))
+    .map((name) => copyFile(resolve(schemaSource, name), resolve(schemaDestination, name))),
 );

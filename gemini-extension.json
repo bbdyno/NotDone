@@ -1,6 +1,6 @@
 {
   "name": "notdone",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Proof-of-completion verification for Gemini CLI",
   "contextFileName": "GEMINI-extension.md",
   "mcpServers": {

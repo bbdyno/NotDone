@@ -12,10 +12,12 @@ import {
   type ArtifactReference,
   type Evidence,
   type EvidenceBundle,
+  type VerifiedWorkspaceBaseline,
 } from "@notdone/protocol";
 
 import type { StoreArtifactOptions } from "./artifact-store.js";
 import type { WorkspacePreflightResult } from "./workspace-preflight.js";
+import { captureWorkspaceBaseline, changedWorkspacePaths } from "./workspace-baseline.js";
 
 const execFileAsync = promisify(execFile);
 const BASELINE_SHA_PATTERN = /^[a-f0-9]{40,64}$/u;
@@ -51,6 +53,7 @@ export interface CollectBaselineDiffEvidenceOptions {
   preflight: WorkspacePreflightResult;
   artifactStore: BaselineDiffArtifactStore;
   now?: () => Date;
+  workspaceBaseline?: VerifiedWorkspaceBaseline;
 }
 
 export interface BaselineDiffEvidence {
@@ -62,8 +65,12 @@ export interface BaselineDiffEvidence {
 
 interface BaselineDiffPayload {
   baselineSha: string;
-  trackedDiff: string;
-  untrackedFiles: Array<{ path: string; contentBase64: string }>;
+  trackedDiff?: string;
+  untrackedFiles?: Array<{ path: string; contentBase64: string }>;
+  predecessorWorkspaceDigest?: string;
+  currentWorkspaceDigest?: string;
+  changedPaths?: string[];
+  outputFiles?: Array<{ path: string; kind: "file" | "symlink"; digest: string; size: number }>;
 }
 
 function artifactReference(artifact: Artifact): ArtifactReference {
@@ -74,8 +81,8 @@ function artifactReference(artifact: Artifact): ArtifactReference {
   };
 }
 
-function artifactId(prefix: string, runId: string, baselineSha: string): string {
-  return `${prefix}.${sha256Json({ runId, baselineSha }).slice(0, 32)}`;
+function artifactId(prefix: string, runId: string, baselineIdentity: string): string {
+  return `${prefix}.${sha256Json({ runId, baselineIdentity }).slice(0, 32)}`;
 }
 
 function fail(
@@ -115,14 +122,14 @@ function insideWorkspace(root: string, path: string): string {
   return candidate;
 }
 
-async function untrackedFiles(root: string): Promise<BaselineDiffPayload["untrackedFiles"]> {
+async function untrackedFiles(root: string): Promise<NonNullable<BaselineDiffPayload["untrackedFiles"]>> {
   const output = await git(
     root,
     ["ls-files", "--others", "--exclude-standard", "-z", "--"],
     "listing untracked files",
   );
   const paths = output.split("\0").filter((path) => path.length > 0).sort();
-  const files: BaselineDiffPayload["untrackedFiles"] = [];
+  const files: NonNullable<BaselineDiffPayload["untrackedFiles"]> = [];
 
   for (const path of paths) {
     const candidate = insideWorkspace(root, path);
@@ -182,6 +189,7 @@ export async function collectBaselineDiffEvidence({
   preflight,
   artifactStore,
   now = () => new Date(),
+  workspaceBaseline,
 }: CollectBaselineDiffEvidenceOptions): Promise<BaselineDiffEvidence> {
   const { root: preflightRoot, baselineSha, runId } = preflightMetadata(preflight);
   let root: string;
@@ -207,25 +215,40 @@ export async function collectBaselineDiffEvidence({
     throw fail("invalid-baseline", "The frozen baseline no longer resolves to the expected commit.");
   }
 
-  const [trackedDiff, untracked] = await Promise.all([
-    git(
-      root,
-      ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-renames", baselineSha, "--"],
-      "collecting tracked workspace changes",
-    ),
-    untrackedFiles(root),
-  ]);
-  const payload: BaselineDiffPayload = {
-    baselineSha,
-    trackedDiff,
-    untrackedFiles: untracked,
-  };
+  let payload: BaselineDiffPayload;
+  let trackedDiffDigest: string;
+  let untrackedFileCount: number;
+  let baselineIdentity = baselineSha;
+  if (workspaceBaseline === undefined) {
+    const [trackedDiff, untracked] = await Promise.all([
+      git(root, ["diff", "--binary", "--full-index", "--no-ext-diff", "--no-renames", baselineSha, "--"], "collecting tracked workspace changes"),
+      untrackedFiles(root),
+    ]);
+    payload = { baselineSha, trackedDiff, untrackedFiles: untracked };
+    trackedDiffDigest = createHash("sha256").update(trackedDiff, "utf8").digest("hex");
+    untrackedFileCount = untracked.length;
+  } else {
+    if (workspaceBaseline.baseRevision !== baselineSha) throw fail("invalid-baseline", "The verified workspace baseline does not match the frozen Git revision.");
+    const current = await captureWorkspaceBaseline({ workspaceRoot: root, now });
+    const changedPaths = changedWorkspacePaths(workspaceBaseline, current);
+    const changed = new Set(changedPaths);
+    payload = {
+      baselineSha,
+      predecessorWorkspaceDigest: workspaceBaseline.workspaceDigest,
+      currentWorkspaceDigest: current.workspaceDigest,
+      changedPaths,
+      outputFiles: current.files.filter((file) => changed.has(file.path)),
+    };
+    trackedDiffDigest = sha256Json(changedPaths);
+    untrackedFileCount = 0;
+    baselineIdentity = workspaceBaseline.workspaceDigest;
+  }
   const serializedPayload = canonicalizeJson(payload);
   const capturedAt = now().toISOString();
   let artifact: Artifact;
   try {
     artifact = await artifactStore.store({
-      id: artifactId("artifact.baseline-diff", runId, baselineSha),
+      id: artifactId("artifact.baseline-diff", runId, baselineIdentity),
       mediaType: BASELINE_DIFF_MEDIA_TYPE,
       content: serializedPayload,
       createdAt: capturedAt,
@@ -233,8 +256,9 @@ export async function collectBaselineDiffEvidence({
         runId,
         baselineSha,
         repositoryRoot: root,
-        trackedDiffDigest: createHash("sha256").update(trackedDiff, "utf8").digest("hex"),
-        untrackedFileCount: untracked.length,
+        trackedDiffDigest,
+        untrackedFileCount,
+        ...(workspaceBaseline === undefined ? {} : { predecessorWorkspaceDigest: workspaceBaseline.workspaceDigest }),
       },
     });
   } catch {
@@ -243,14 +267,14 @@ export async function collectBaselineDiffEvidence({
 
   const evidence: Evidence = {
     schemaVersion: SCHEMA_VERSION,
-    id: artifactId("evidence.baseline-diff", runId, baselineSha),
+    id: artifactId("evidence.baseline-diff", runId, baselineIdentity),
     observedAt: capturedAt,
     artifact: artifactReference(artifact),
     metadata: { runId, baselineSha },
   };
   const evidenceBundle: EvidenceBundle = {
     schemaVersion: SCHEMA_VERSION,
-    id: artifactId("evidence-bundle.baseline-diff", runId, baselineSha),
+    id: artifactId("evidence-bundle.baseline-diff", runId, baselineIdentity),
     createdAt: capturedAt,
     evidence: [evidence],
   };

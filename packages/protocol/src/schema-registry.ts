@@ -11,6 +11,9 @@ import evidenceSchema from "../../../schemas/evidence.schema.json" with {
 import executionPlanSchema from "../../../schemas/execution-plan.schema.json" with {
   type: "json",
 };
+import goalPlanSchema from "../../../schemas/goal-plan.schema.json" with {
+  type: "json",
+};
 import packManifestSchema from "../../../schemas/pack-manifest.schema.json" with {
   type: "json",
 };
@@ -26,14 +29,19 @@ import taskContractSchema from "../../../schemas/task-contract.schema.json" with
 import verificationResultSchema from "../../../schemas/verification-result.schema.json" with {
   type: "json",
 };
+import workspaceBaselineSchema from "../../../schemas/workspace-baseline.schema.json" with {
+  type: "json",
+};
 import type {
   EvidenceRecord,
   ExecutionPlan,
+  GoalPlan,
   PackManifest,
   ProofPacket,
   RuntimeEvent,
   TaskContract,
   VerificationResult,
+  VerifiedWorkspaceBaseline,
 } from "./types.js";
 
 const ajv = new Ajv2020({
@@ -48,10 +56,12 @@ for (const schema of [
   taskContractSchema,
   evidenceSchema,
   executionPlanSchema,
+  goalPlanSchema,
   packManifestSchema,
   runtimeEventSchema,
   verificationResultSchema,
   proofPacketSchema,
+  workspaceBaselineSchema,
 ]) {
   ajv.addSchema(schema);
 }
@@ -73,6 +83,9 @@ const evidenceValidator = getValidator<EvidenceRecord>(
 const executionPlanValidator = getValidator<ExecutionPlan>(
   "urn:notdone:schema:execution-plan:v1",
 );
+const goalPlanValidator = getValidator<GoalPlan>(
+  "urn:notdone:schema:goal-plan:v1",
+);
 const packManifestValidator = getValidator<PackManifest>(
   "urn:notdone:schema:pack-manifest:v1",
 );
@@ -84,6 +97,9 @@ const verificationResultValidator = getValidator<VerificationResult>(
 );
 const proofPacketValidator = getValidator<ProofPacket>(
   "urn:notdone:schema:proof-packet:v1",
+);
+const workspaceBaselineValidator = getValidator<VerifiedWorkspaceBaseline>(
+  "urn:notdone:schema:workspace-baseline:v1",
 );
 
 export interface ValidationFailure {
@@ -190,6 +206,63 @@ export const validateExecutionPlan = (
   return errors.length === 0 ? result : { valid: false, errors };
 };
 
+function goalPlanSemanticErrors(plan: GoalPlan): ErrorObject[] {
+  const taskIds = new Set<string>();
+  const errors: ErrorObject[] = [];
+  for (const task of plan.tasks) {
+    if (taskIds.has(task.taskId)) {
+      errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/uniqueTaskIds", keyword: "semantic", params: {}, message: `duplicate task id: ${task.taskId}` });
+    }
+    taskIds.add(task.taskId);
+    const criterionIds = new Set<string>();
+    const checkIds = new Set<string>();
+    const verifierIds = new Set<string>();
+    for (const criterion of task.acceptanceCriteria) {
+      if (criterionIds.has(criterion.id)) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/uniqueCriterionIds", keyword: "semantic", params: {}, message: `duplicate acceptance criterion id in ${task.taskId}: ${criterion.id}` });
+      criterionIds.add(criterion.id);
+      if (criterion.id === `${task.taskId}.workspace-scope`) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/reservedCompilerIds", keyword: "semantic", params: {}, message: `acceptance criterion uses a compiler-reserved id in ${task.taskId}: ${criterion.id}` });
+      for (const check of criterion.checks) {
+        if (checkIds.has(check.id)) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/uniqueCheckIds", keyword: "semantic", params: {}, message: `duplicate check id in ${task.taskId}: ${check.id}` });
+        checkIds.add(check.id);
+        if (check.id === `${task.taskId}.workspace-diff`) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/reservedCompilerIds", keyword: "semantic", params: {}, message: `check uses a compiler-reserved id in ${task.taskId}: ${check.id}` });
+      }
+    }
+    for (const verifier of [...task.requiredVerifiers, ...task.humanEvidenceRequirements]) {
+      if (verifierIds.has(verifier.id)) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/uniqueVerifierIds", keyword: "semantic", params: {}, message: `duplicate verifier id in ${task.taskId}: ${verifier.id}` });
+      verifierIds.add(verifier.id);
+    }
+  }
+  for (const task of plan.tasks) {
+    for (const dependency of task.dependsOn ?? []) {
+      if (dependency === task.taskId || !taskIds.has(dependency)) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/taskDependencies", keyword: "semantic", params: {}, message: `unknown or self dependency for ${task.taskId}: ${dependency}` });
+    }
+  }
+  const visiting = new Set<string>();
+  const visited = new Set<string>();
+  const byId = new Map(plan.tasks.map((task) => [task.taskId, task]));
+  const visit = (taskId: string): boolean => {
+    if (visiting.has(taskId)) return true;
+    if (visited.has(taskId)) return false;
+    visiting.add(taskId);
+    const cyclic = (byId.get(taskId)?.dependsOn ?? []).some(visit);
+    visiting.delete(taskId);
+    visited.add(taskId);
+    return cyclic;
+  };
+  if (plan.tasks.some((task) => visit(task.taskId))) errors.push({ instancePath: "/tasks", schemaPath: "#/semantic/acyclicDependencies", keyword: "semantic", params: {}, message: "task dependencies contain a cycle" });
+  return errors;
+}
+
+export const validateGoalPlan = (value: unknown): ValidationResult<GoalPlan> => {
+  const result = validate(goalPlanValidator, value);
+  if (!result.valid) return result;
+  const errors = goalPlanSemanticErrors(result.value);
+  return errors.length === 0 ? result : { valid: false, errors };
+};
+
+export const validateWorkspaceBaseline = (value: unknown): ValidationResult<VerifiedWorkspaceBaseline> =>
+  validate(workspaceBaselineValidator, value);
+
 export const validatePackManifest = (
   value: unknown,
 ): ValidationResult<PackManifest> => validate(packManifestValidator, value);
@@ -238,6 +311,16 @@ export function assertExecutionPlan(
   if (!result.valid) {
     throw new SchemaValidationError("Execution plan", result.errors);
   }
+}
+
+export function assertGoalPlan(value: unknown): asserts value is GoalPlan {
+  const result = validateGoalPlan(value);
+  if (!result.valid) throw new SchemaValidationError("Goal plan", result.errors);
+}
+
+export function assertWorkspaceBaseline(value: unknown): asserts value is VerifiedWorkspaceBaseline {
+  const result = validateWorkspaceBaseline(value);
+  if (!result.valid) throw new SchemaValidationError("Workspace baseline", result.errors);
 }
 
 export function assertPackManifest(value: unknown): asserts value is PackManifest {

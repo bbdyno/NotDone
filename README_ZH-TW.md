@@ -1,4 +1,4 @@
-<!-- docs-revision: 3 -->
+<!-- docs-revision: 4 -->
 
 <p align="center">
   <strong>NotDone</strong><br>
@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/status-v0.1.1-blue" alt="狀態: v0.1.1">
+  <img src="https://img.shields.io/badge/status-v0.2.0-blue" alt="狀態: v0.2.0">
   <a href="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml"><img src="https://github.com/bbdyno/NotDone/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="授權條款: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/Node.js-%3E%3D22-339933" alt="Node.js 22 或更新版本">
@@ -33,7 +33,7 @@
 NotDone 是提供給 AI 程式開發代理程式的執行環境中立完成證明層。它會把驗收條件凍結為機器可讀的合約，從實際工具收集證據，並獨立判定代理程式是否有資格宣稱工作已完成。
 
 > [!NOTE]
-> v0.1.1 是目前版本。原始碼建置、獨立 npm 套件與三個執行環境整合皆由發布工作流程驗證。
+> v0.2.0 是目前版本。原始碼建置、獨立 npm 套件與三個執行環境整合皆由發布工作流程驗證。
 
 ## 為什麼需要 NotDone？
 
@@ -81,6 +81,30 @@ notdone contract validate
 notdone verify
 notdone proof inspect .notdone/proofs/<run-id>.proof.json
 ```
+
+### 自主目標工作流程
+
+將嚴格的 Goal Plan 放在 `.notdone/goal.json` 後，NotDone 會把 READY Task
+即時編譯並凍結為合約，接著自動執行、獨立驗證、有限重試並推進後續 Task。
+現有的 `run-next` 仍保留為低階專家命令。
+
+```shell
+notdone goal validate
+notdone goal run --until human-evidence --max-retries 2
+notdone evidence pending
+```
+
+佇列只收集必須由人確認的證據。審核者必須透過
+`notdone evidence submit ... --attest` 將 PASS 明確綁定至證據 digest；只匯入
+檔案不會產生 PASS。提交後繼續執行：
+
+```shell
+notdone goal resume
+```
+
+請參閱 [Goal Plan 範例](examples/goal-plan.json)、
+[Goal Plan schema](schemas/goal-plan.schema.json)與
+[Workspace Baseline schema](schemas/workspace-baseline.schema.json)。
 
 ### Claude Code
 
@@ -191,8 +215,10 @@ claims:
 
 ## 專案狀態
 
-v0.1.1 版本包含：
+v0.2.0 版本包含：
 
+- Goal Plan、JIT Task 編譯、狀態協調、有限 retry、successor baseline 與
+  Human Evidence Queue；
 - 具版本的 protocol schema、canonical JSON 與 SHA-256 packet integrity
 - 決定性的 command、file 與 Git diff 驗證
 - 可獨立執行的 `notdone` CLI 與 `notdone-mcp` 套件

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": "1.0",
+  "id": "goal.example",
+  "title": "Ship a verified feature",
+  "description": "Implement, test, and collect the evidence required to ship one feature.",
+  "createdAt": "2026-08-02T00:00:00.000Z",
+  "execution": {
+    "adapter": "codex-exec",
+    "timeoutMs": 1800000,
+    "externalNetwork": "allow"
+  },
+  "tasks": [
+    {
+      "taskId": "feature",
+      "title": "Implement the feature",
+      "acceptanceCriteria": [
+        {
+          "id": "criterion.feature-tests",
+          "statement": "The feature test passes.",
+          "checks": [
+            {
+              "id": "check.feature-tests",
+              "type": "command",
+              "command": "pnpm test",
+              "expect": { "exitCode": 0 }
+            }
+          ]
+        }
+      ],
+      "allowedPaths": ["src/**", "test/**"],
+      "requiredPaths": ["src/**"],
+      "forbiddenPaths": ["secrets/**"],
+      "requiredVerifiers": [
+        { "id": "gate.feature.automatic", "kind": "automatic" }
+      ],
+      "humanEvidenceRequirements": [],
+      "retryPolicy": {
+        "maxAttempts": 3,
+        "retryOn": ["execution-failed", "verification-failed"]
+      },
+      "completionPolicy": {
+        "requiredCriteria": "all",
+        "humanEvidence": "required"
+      }
+    },
+    {
+      "taskId": "device-review",
+      "title": "Verify the feature on a real device",
+      "dependsOn": ["feature"],
+      "acceptanceCriteria": [
+        {
+          "id": "criterion.device-build",
+          "statement": "The device build succeeds.",
+          "checks": [
+            {
+              "id": "check.device-build",
+              "type": "command",
+              "command": "pnpm build",
+              "expect": { "exitCode": 0 }
+            }
+          ]
+        }
+      ],
+      "allowedPaths": ["src/**", "test/**"],
+      "requiredPaths": [],
+      "forbiddenPaths": ["secrets/**"],
+      "requiredVerifiers": [
+        { "id": "gate.device-build.automatic", "kind": "automatic" }
+      ],
+      "humanEvidenceRequirements": [
+        {
+          "id": "gate.device-review.human",
+          "description": "A person confirms the feature on a real device.",
+          "instructions": "Capture the device result and confirm that the required behavior works.",
+          "mediaTypes": ["image/png", "video/mp4"]
+        }
+      ],
+      "retryPolicy": {
+        "maxAttempts": 2,
+        "retryOn": ["execution-failed", "verification-failed"]
+      },
+      "completionPolicy": {
+        "requiredCriteria": "all",
+        "humanEvidence": "required"
+      }
+    }
+  ]
+}

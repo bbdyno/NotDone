@@ -19,3 +19,4 @@ export * from "./verify.js";
 export * from "./verify-only.js";
 export * from "./verification-report-ledger.js";
 export * from "./workspace-preflight.js";
+export * from "./workspace-baseline.js";

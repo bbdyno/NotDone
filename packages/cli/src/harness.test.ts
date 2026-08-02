@@ -147,8 +147,7 @@ describe("public harness commands", () => {
       await importHarnessEvidence({ artifactRoot: value.artifacts, runId: run.runId, gateId: "gate.device", file, capturedAt: timestamp });
       const store = new FilesystemArtifactStore({ rootDirectory: value.artifacts });
       const history = await store.readImmutableRecords("notdone.public-cli.run-history.v1");
-      const entry = history.find((item) => item.content.toString("utf8").includes("external-evidence"))!;
-      const imported = JSON.parse(entry.content.toString("utf8")) as { payload: { bundle: { artifactId: string; digest: string } } };
+      const imported = history.map((item) => JSON.parse(item.content.toString("utf8")) as { type: string; payload: { bundle: { artifactId: string; digest: string } } }).find((item) => item.type === "external-evidence")!;
       const evidenceBundle = { schemaVersion: SCHEMA_VERSION, ...imported.payload.bundle };
       const report: VerificationReport = { schemaVersion: SCHEMA_VERSION, id: "report.device.pass", createdAt: timestamp, gateId: "gate.device", verdict: "PASS", evidenceBundle };
       const ledger = new VerificationReportLedger(store); await ledger.append(run.runId, report);

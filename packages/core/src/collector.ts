@@ -20,9 +20,11 @@ import {
   type GitDiffCheck,
   type JsonValue,
   type TaskContract,
+  type VerifiedWorkspaceBaseline,
 } from "@notdone/protocol";
 
 import { assertValidContract } from "./semantic-validation.js";
+import { captureWorkspaceBaseline, changedWorkspacePaths } from "./workspace-baseline.js";
 
 const execFileAsync = promisify(execFile);
 const DEFAULT_MAX_OUTPUT_BYTES = 1024 * 1024;
@@ -33,6 +35,7 @@ export interface CollectEvidenceOptions {
   workspaceRoot: string;
   now?: () => Date;
   maxOutputBytes?: number;
+  workspaceBaseline?: VerifiedWorkspaceBaseline;
 }
 
 interface CommandOutcome {
@@ -384,9 +387,11 @@ async function collectGitDiffEvidence(
   check: GitDiffCheck,
   contract: TaskContract,
   options: Required<Pick<CollectEvidenceOptions, "now">> &
-    Pick<CollectEvidenceOptions, "runId" | "workspaceRoot">,
+    Pick<CollectEvidenceOptions, "runId" | "workspaceRoot" | "workspaceBaseline">,
 ): Promise<EvidenceRecord> {
-  const paths = await changedPaths(options.workspaceRoot, contract.baseRevision);
+  const paths = options.workspaceBaseline === undefined
+    ? await changedPaths(options.workspaceRoot, contract.baseRevision)
+    : changedWorkspacePaths(options.workspaceBaseline, await captureWorkspaceBaseline({ workspaceRoot: options.workspaceRoot, now: options.now }));
   const allowedPassed =
     check.allowedPaths === undefined ||
     paths.every((path) => matchesAny(path, check.allowedPaths));
@@ -439,6 +444,7 @@ export async function collectEvidence({
   workspaceRoot,
   now = () => new Date(),
   maxOutputBytes = DEFAULT_MAX_OUTPUT_BYTES,
+  workspaceBaseline,
 }: CollectEvidenceOptions): Promise<EvidenceRecord[]> {
   assertValidContract(contract);
   const evidence: EvidenceRecord[] = [];
@@ -446,6 +452,7 @@ export async function collectEvidence({
     runId,
     workspaceRoot: await realpath(resolve(workspaceRoot)),
     now,
+    ...(workspaceBaseline === undefined ? {} : { workspaceBaseline }),
   };
 
   for (const claim of contract.claims) {

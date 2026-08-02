@@ -20,6 +20,7 @@ import { CodexExecBackend, NodeCodexProcessSpawner } from "@notdone/codex-exec-a
 import {
   SCHEMA_VERSION,
   assertExecutionPlan,
+  assertWorkspaceBaseline,
   canonicalizeJson,
   sha256Json,
   type DigestArtifactReference,
@@ -30,6 +31,7 @@ import {
   type Run,
   type TaskContract,
   type VerificationReport,
+  type VerifiedWorkspaceBaseline,
 } from "@notdone/protocol";
 
 const RUN_COLLECTION = "notdone.public-cli.run-history.v1";
@@ -51,6 +53,8 @@ export interface HarnessRequest {
   plan: ExecutionPlan;
   prompt: string;
   codex?: { executable?: string; timeoutMs?: number };
+  preflightBaseline?: VerifiedWorkspaceBaseline;
+  verificationBaseline?: VerifiedWorkspaceBaseline;
 }
 
 export interface HarnessContext {
@@ -67,7 +71,7 @@ interface RunEvent {
 
 interface RunState {
   request?: HarnessRequest & { targetWorkspace: string };
-  outcome?: { status: HarnessStatus; run?: Run; bindings: Record<string, DigestArtifactReference> };
+  outcome?: { status: HarnessStatus; reason?: string; run?: Run; bindings: Record<string, DigestArtifactReference> };
   external: Record<string, DigestArtifactReference[]>;
 }
 
@@ -99,7 +103,7 @@ function nonEmpty(value: unknown, label: string): string {
 
 export function parseHarnessRequest(value: unknown): HarnessRequest {
   const request = object(value, "Run request");
-  exactKeys(request, ["schemaVersion", "runId", "contract", "plan", "prompt", "codex"], "Run request");
+  exactKeys(request, ["schemaVersion", "runId", "contract", "plan", "prompt", "codex", "preflightBaseline", "verificationBaseline"], "Run request");
   if (request.schemaVersion !== SCHEMA_VERSION) fail("Run request schemaVersion is unsupported.");
   const runId = nonEmpty(request.runId, "Run request runId");
   const prompt = nonEmpty(request.prompt, "Run request prompt");
@@ -120,7 +124,15 @@ export function parseHarnessRequest(value: unknown): HarnessRequest {
     if (options.timeoutMs !== undefined && (!Number.isSafeInteger(options.timeoutMs) || (options.timeoutMs as number) <= 0)) fail("Run request codex timeoutMs is invalid.");
     codex = { ...(options.executable === undefined ? {} : { executable: options.executable as string }), ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs as number }) };
   }
-  return { schemaVersion: SCHEMA_VERSION, runId, contract, plan, prompt, ...(codex === undefined ? {} : { codex }) };
+  let preflightBaseline: VerifiedWorkspaceBaseline | undefined;
+  let verificationBaseline: VerifiedWorkspaceBaseline | undefined;
+  try {
+    if (request.preflightBaseline !== undefined) { assertWorkspaceBaseline(request.preflightBaseline); preflightBaseline = request.preflightBaseline; }
+    if (request.verificationBaseline !== undefined) { assertWorkspaceBaseline(request.verificationBaseline); verificationBaseline = request.verificationBaseline; }
+  } catch { fail("Run request workspace baseline is invalid."); }
+  if (preflightBaseline !== undefined && preflightBaseline.baseRevision !== contract.baseRevision) fail("Run request preflight baseline does not match the contract base revision.");
+  if (verificationBaseline !== undefined && verificationBaseline.baseRevision !== contract.baseRevision) fail("Run request verification baseline does not match the contract base revision.");
+  return { schemaVersion: SCHEMA_VERSION, runId, contract, plan, prompt, ...(codex === undefined ? {} : { codex }), ...(preflightBaseline === undefined ? {} : { preflightBaseline }), ...(verificationBaseline === undefined ? {} : { verificationBaseline }) };
 }
 
 function outsideWorkspace(artifactRoot: string, workspace: string): void {
@@ -253,9 +265,10 @@ async function loadState(store: FilesystemArtifactStore, runId: string): Promise
       if (state.request !== undefined && canonicalizeJson(state.request) !== canonicalizeJson({ ...request, targetWorkspace })) fail("Run request is already bound to different content.");
       state.request = { ...request, targetWorkspace };
     } else if (event.type === "outcome") {
-      exactKeys(payload, ["status", "run", "bindings"], "Run outcome history");
+      exactKeys(payload, ["status", "reason", "run", "bindings"], "Run outcome history");
       if (payload.status !== "VERIFIED" && payload.status !== "AWAITING_DEVICE_EVIDENCE" && payload.status !== "FAILED" && payload.status !== "BLOCKED") fail("Run outcome status is invalid.");
-      state.outcome = { status: payload.status, ...(payload.run === undefined ? {} : { run: payload.run as Run }), bindings: asBindings(payload.bindings) };
+      if (payload.reason !== undefined && (typeof payload.reason !== "string" || payload.reason.length === 0)) fail("Run outcome reason is invalid.");
+      state.outcome = { status: payload.status, ...(payload.reason === undefined ? {} : { reason: payload.reason }), ...(payload.run === undefined ? {} : { run: payload.run as Run }), bindings: asBindings(payload.bindings) };
     } else {
       exactKeys(payload, ["gateId", "bundle"], "External evidence history");
       const gateId = nonEmpty(payload.gateId, "External evidence gate id");
@@ -294,7 +307,7 @@ function publicState(status: HarnessStatus, reason?: string): { status: HarnessS
 async function evaluateState(store: FilesystemArtifactStore, runId: string): Promise<{ state: RunState; result: { status: HarnessStatus; reason?: string } }> {
   const state = await loadState(store, runId);
   if (state.request === undefined) return { state, result: publicState("BLOCKED", "run-not-found") };
-  if (state.outcome?.status === "FAILED" || state.outcome?.status === "BLOCKED") return { state, result: publicState(state.outcome.status) };
+  if (state.outcome?.status === "FAILED" || state.outcome?.status === "BLOCKED") return { state, result: publicState(state.outcome.status, state.outcome.reason) };
   try {
     const ledger = new VerificationReportLedger(store);
     const coordinator = new GateLockCoordinator({ artifactStore: store, reportLedger: ledger });
@@ -358,8 +371,8 @@ export async function runNextHarness({ artifactRoot, targetWorkspace, request, c
   await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "request", payload: json({ request, targetWorkspace: repositoryRoot }) });
   if (!(await claimExecution(store, request.runId))) return publicState("BLOCKED", "run-in-progress");
   let preflight;
-  try { preflight = await preflightWorkspace({ workspaceRoot: repositoryRoot, contract: request.contract, runId: request.runId, now: context.now }); }
-  catch { const result = publicState("BLOCKED", "preflight-failed"); await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, bindings: {} }) }); return result; }
+  try { preflight = await preflightWorkspace({ workspaceRoot: repositoryRoot, contract: request.contract, runId: request.runId, now: context.now, ...(request.preflightBaseline === undefined ? {} : { workspaceBaseline: request.preflightBaseline }) }); }
+  catch { const result = publicState("BLOCKED", "preflight-failed"); await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, reason: result.reason!, bindings: {} }) }); return result; }
   const snapshot = await store.store({ id: preflight.taskSnapshot.id, mediaType: preflight.taskSnapshot.mediaType, content: preflight.taskSnapshot.metadata.snapshotJson, metadata: preflight.taskSnapshot.metadata, createdAt: preflight.taskSnapshot.createdAt });
   if (snapshot.digest !== preflight.taskSnapshot.digest) fail("Task snapshot persistence failed integrity validation.");
   await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "preflight", role: "immutable-task-snapshot", artifact: artifactReference(snapshot) });
@@ -394,14 +407,14 @@ async function executeBound({ store, request, preflight, backend, context }: { s
   await appendExecutionArtifacts(store, request.runId, runtimeResult.artifacts);
   if (runtimeResult.run.status !== "succeeded") {
     const result = publicState("FAILED", "codex-execution-failed");
-    await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings: {} }) });
+    await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, reason: result.reason!, run: runtimeResult.run, bindings: {} }) });
     return result;
   }
-  const proof = await verifyWorkspace({ contract: request.contract, runId: request.runId, workspaceRoot: preflight.repository.root, now: context.now, evaluatedAt: context.now().toISOString() });
+  const proof = await verifyWorkspace({ contract: request.contract, runId: request.runId, workspaceRoot: preflight.repository.root, now: context.now, evaluatedAt: context.now().toISOString(), ...(request.verificationBaseline === undefined ? {} : { workspaceBaseline: request.verificationBaseline }) });
   const proofArtifact = await store.store({ id: `artifact.verification-proof.${sha256Json({ runId: request.runId, digest: sha256Json(proof) }).slice(0, 32)}`, mediaType: "application/vnd.notdone.proof-packet+json", content: canonicalizeJson(proof), createdAt: proof.createdAt, metadata: { runId: request.runId, result: proof.result.status } });
   await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: "verification-proof", artifact: artifactReference(proofArtifact) });
   let baseline;
-  try { baseline = await collectBaselineDiffEvidence({ preflight, artifactStore: store, now: context.now }); } catch { const result = publicState("FAILED", "baseline-evidence-failed"); await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings: {} }) }); return result; }
+  try { baseline = await collectBaselineDiffEvidence({ preflight, artifactStore: store, now: context.now, ...(request.verificationBaseline === undefined ? {} : { workspaceBaseline: request.verificationBaseline }) }); } catch { const result = publicState("FAILED", "baseline-evidence-failed"); await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, reason: result.reason!, run: runtimeResult.run, bindings: {} }) }); return result; }
   await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: "baseline-diff", artifact: artifactReference(baseline.artifact) });
   const automaticEvidenceBundle = await automaticVerifierBundle({ store, runId: request.runId, createdAt: proof.createdAt, proof: proofArtifact, baseline: baseline.artifact });
   await appendRunArtifact(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, stage: "verification", role: "automatic-verifier-evidence-bundle", artifact: automaticEvidenceBundle });
@@ -417,12 +430,12 @@ async function executeBound({ store, request, preflight, backend, context }: { s
   }
   if (proof.result.status === "failed") {
     const result = publicState("FAILED", "automatic-verification-failed");
-    await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings }) });
+    await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, reason: result.reason!, run: runtimeResult.run, bindings }) });
     return result;
   }
   if (proof.result.status === "blocked" || proof.result.status === "unverified") {
     const result = publicState("BLOCKED", "automatic-verification-incomplete");
-    await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings }) });
+    await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, reason: result.reason!, run: runtimeResult.run, bindings }) });
     return result;
   }
   const coordinator = new GateLockCoordinator({ artifactStore: store, reportLedger: ledger });
@@ -431,7 +444,7 @@ async function executeBound({ store, request, preflight, backend, context }: { s
   Object.assign(combined, await selectedExternalBindings(state, ledger));
   const lock = await coordinator.unlock({ runId: request.runId, plan: request.plan, requiredEvidenceBundles: combined, now: context.now });
   const result = lock.state === "UNLOCKED" && lock.sealed && lock.transition !== undefined ? publicState("VERIFIED") : lock.state === "AWAITING_EVIDENCE" ? publicState("AWAITING_DEVICE_EVIDENCE", lock.reason) : publicState("FAILED", lock.reason ?? "unsealed-gate");
-  await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, run: runtimeResult.run, bindings }) });
+  await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId: request.runId, type: "outcome", payload: json({ status: result.status, ...(result.reason === undefined ? {} : { reason: result.reason }), run: runtimeResult.run, bindings }) });
   return result;
 }
 
@@ -494,4 +507,28 @@ export async function importHarnessEvidence({ artifactRoot, runId, gateId, file,
   const bundle: DigestArtifactReference = { schemaVersion: SCHEMA_VERSION, artifactId: imported.evidenceBundleArtifact.id, digest: imported.evidenceBundleArtifact.digest };
   await appendEvent(store, { schemaVersion: SCHEMA_VERSION, runId, type: "external-evidence", payload: json({ gateId, bundle }) });
   return { artifactId: imported.artifact.id, digest: imported.artifact.digest, evidenceBundleId: bundle.artifactId, evidenceBundleDigest: bundle.digest };
+}
+
+/** Records an explicit human attestation for an already imported, digest-bound bundle. */
+export async function attestHarnessEvidence({ artifactRoot, runId, gateId, evidenceBundleId, evidenceBundleDigest, attestedAt }: { artifactRoot: string; runId: string; gateId: string; evidenceBundleId: string; evidenceBundleDigest: string; attestedAt: string }): Promise<{ reportId: string; gateId: string; verdict: "PASS" }> {
+  const store = new FilesystemArtifactStore({ rootDirectory: resolve(artifactRoot) });
+  const state = await loadState(store, runId);
+  if (state.request === undefined || state.outcome?.status !== "AWAITING_DEVICE_EVIDENCE") fail("Human attestation requires a run awaiting external evidence.");
+  const gate = (state.request.plan.verificationGates ?? []).find((entry) => entry.id === gateId);
+  if (gate?.required !== true || gate.evidenceRequirement !== "external") fail("Human attestation requires a required external verification gate.");
+  const imported = state.external[gateId] ?? [];
+  const bundle = imported.find((entry) => entry.artifactId === evidenceBundleId && entry.digest === evidenceBundleDigest);
+  if (bundle === undefined) fail("Human attestation must bind an imported evidence bundle.");
+  if (Number.isNaN(Date.parse(attestedAt))) fail("Human attestation timestamp is invalid.");
+  const report: VerificationReport = {
+    schemaVersion: SCHEMA_VERSION,
+    id: `report.human-attestation.${sha256Json({ runId, gateId, bundle }).slice(0, 32)}`,
+    createdAt: attestedAt,
+    gateId,
+    verdict: "PASS",
+    evidenceBundle: bundle,
+    reason: "A human explicitly attested that the imported evidence satisfies this gate.",
+  };
+  await new VerificationReportLedger(store).append(runId, report);
+  return { reportId: report.id, gateId, verdict: "PASS" };
 }

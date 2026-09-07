@@ -39,9 +39,9 @@
     "typecheck": "tsc -b --pretty false"
   },
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@notdone/core": "workspace:*",
     "@notdone/protocol": "workspace:*",
-    "zod": "^4.4.3"
+    "zod": "^4.5.4"
   }
 }

@@ -26,7 +26,7 @@ NotDone v0.1 protects users from unsupported, mistaken, incomplete, or hallucina
 - Detect proof packet and evidence digest mismatches
 - Record runtime capability and coverage gaps
 - Reject paths outside configured evidence roots
-- Redact configured secrets from stored output
+- Redact configured secrets from stored output (defined in the protocol, not yet applied by the v0.1 collector)
 
 ## Out-of-scope attacks for v0.1
 

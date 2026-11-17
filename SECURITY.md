@@ -6,7 +6,12 @@ NotDone has not published a stable release. Security fixes currently target the 
 
 ## Report a vulnerability
 
-Do not open a public issue. Use GitHub private vulnerability reporting for `bbdyno/NotDone` when it is enabled. If private reporting is unavailable, open a minimal issue that asks the maintainer for a private contact channel without including exploit details.
+Do not open a public issue. Report privately through either channel:
+
+- email the maintainer, bbdyno, at della.kimko@gmail.com, the primary security contact;
+- GitHub private vulnerability reporting for `bbdyno/NotDone`.
+
+`.oss-scanner/threat_model.md` describes the attack surface and how we rate severity. It applies to every report, including reports from automated vulnerability scanners.
 
 Include:
 
